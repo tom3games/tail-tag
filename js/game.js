@@ -1,18 +1,18 @@
 // 空中しっぽ取り。WIRE ESCAPE のワイヤーと街で、CPU 3人と腰の手ぬぐい（しっぽ）を取り合う
 // 地面に居続けるとしっぽが光ってばれる。3分で昼から夜になる。終わった時の本数で順位
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=6'
-import { createWorld } from '../shared/track.js?v=6'
-import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=6'
-import { buildScene } from './scene.js?v=6'
-import { FX } from './fx.js?v=6'
-import { loadSky, setAniso } from './look.js?v=6'
-import { Q } from './quality.js?v=6'
-import { RunnerModel } from './runnermodel.js?v=6'
-import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=6'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=6'
-import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=6'
-import { createBot, botInput } from '../shared/tagbot.js?v=6'
+import { GAME } from '../shared/config.js?v=7'
+import { createWorld } from '../shared/track.js?v=7'
+import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=7'
+import { buildScene } from './scene.js?v=7'
+import { FX } from './fx.js?v=7'
+import { loadSky, setAniso } from './look.js?v=7'
+import { Q } from './quality.js?v=7'
+import { RunnerModel } from './runnermodel.js?v=7'
+import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=7'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=7'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=7'
+import { createBot, botInput } from '../shared/tagbot.js?v=7'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -24,7 +24,10 @@ const T = {
   ja: {
     logo: '空中しっぽ取り', sub: 'ビルの谷間で、腰の手ぬぐいを奪い合う',
     lvHead: '相手の強さ', lvEasy: 'かんたん', lvNormal: 'ふつう', lvHard: 'むずかしい',
-    start: 'はじめる', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '準備中',
+    modeHead: 'ルール', modeTag: '取り合い', modeFlee: '逃げるだけ',
+    fleeWin: '逃げきった', fleeLose: '全部取られた', fleeDown: '全部取られた…', hintFlee: '<small>こつ</small>3人とも自分を追ってくる。飛んで逃げろ',
+    statLeft: '残った', statLost: '取られた', postFlee: (n, ok) => ok ? `空中しっぽ取り（逃げるだけ）で手ぬぐい${n}本残して逃げきった` : '空中しっぽ取り（逃げるだけ）で全部取られた',
+    start: 'はじめる', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '手ぬぐいを干しています',
     howTitle: '遊び方', ok: 'わかった',
     howItems: [
       '建物や電柱を<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す',
@@ -47,7 +50,10 @@ const T = {
   en: {
     logo: 'Tail Tag in the Sky', sub: 'Swing between towers and steal the towels tucked in their belts',
     lvHead: 'Rivals', lvEasy: 'Easy', lvNormal: 'Normal', lvHard: 'Hard',
-    start: 'Play', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Loading',
+    modeHead: 'Rules', modeTag: 'Steal', modeFlee: 'Escape',
+    fleeWin: 'Escaped', fleeLose: 'All taken', fleeDown: 'All taken...', hintFlee: '<small>Tip</small>All three are after you. Fly!',
+    statLeft: 'Left', statLost: 'Taken', postFlee: (n, ok) => ok ? `Escaped with ${n} towels in Tail Tag in the Sky (escape mode)` : 'Lost all my towels in Tail Tag in the Sky (escape mode)',
+    start: 'Play', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Hanging the towels',
     howTitle: 'How to play', ok: 'Got it',
     howItems: [
       '<b>Tap</b> a building or pole, or the big button, to swing. Press again to let go',
@@ -69,6 +75,7 @@ const T = {
   }
 }
 let level = ['easy', 'normal', 'hard'].includes(store.get('tt.level')) ? store.get('tt.level') : 'easy'
+let gmode = store.get('tt.mode') === 'flee' ? 'flee' : 'tag'   // 取り合い／逃げるだけ
 let lang = store.get('tt.lang') || ((navigator.language || 'ja').startsWith('ja') ? 'ja' : 'en')
 const t = k => T[lang][k]
 const pname = i => COLORS[i].name[lang === 'ja' ? 0 : 1]
@@ -229,7 +236,7 @@ function newMatch(seed, demo) {
   const sp = spawnPoints()
   const rs = sp.map(([x, z, yaw], i) => createRunner({ id: COLORS[i].id, spawn: { x, y: 0, z, yaw } }))
   const lv = demo ? 'normal' : level
-  m = createMatch(world, rs, seed, lv)
+  m = createMatch(world, rs, seed, lv, demo ? 'tag' : gmode)
   bots = [demo ? createBot('cpu', 0.6, seed) : null, ...TAG.levels[lv].cpu.map((s, i) => createBot('cpu', s, seed * 13 + i))]
   rebuildModels()
 }
@@ -357,7 +364,8 @@ function startMatch(seed = Math.floor(Math.random() * 1e6)) {
   show(null); $('touch').classList.toggle('hidden', !touchMode)
   Snd.loop('bgm', 'snd/bgm_play.mp3', 0.15); Snd.loop('amb', 'snd/loop_highway.mp3', 0.14); Snd.loop('wind', 'snd/air_01.mp3', 0.0001)
   const seen = store.get('tt.tut') === '1'
-  hints = seen ? [[1.0, touchMode ? 'hint1' : 'hint1Pc']] : [[1.0, touchMode ? 'hint1' : 'hint1Pc'], [7, 'hint2'], [16, 'hint3']]
+  hints = seen ? [[1.0, touchMode ? 'hint1' : 'hint1Pc']] : [[1.0, touchMode ? 'hint1' : 'hint1Pc'], [7, gmode === 'flee' ? 'hintFlee' : 'hint2'], [16, 'hint3']]
+  if (seen && gmode === 'flee') hints.push([5, 'hintFlee'])
   store.set('tt.tut', '1')
   buildLine()
 }
@@ -446,7 +454,7 @@ function onMatchEvent(e) {
     fx.debrisAt(e.x, e.y, e.z, 12, 0xf2efe6, { speed: 3, up: 3, size: 0.12 })
   } else if (e.t === 'freeNew') { sfx('free', { vol: 0.45 }) }
   else if (e.t === 'glow' && e.who === 0) { sfx('glow', { vol: 0.6 }) }
-  else if (e.t === 'end') { sfx('whoosh'); say(t('end'), 1.8, 'big'); endAt = 1.8 }
+  else if (e.t === 'end') { sfx('whoosh'); say(e.down ? t('fleeDown') : t('end'), 1.8, 'big'); endAt = 1.8 }
 }
 function bump(i) { const peg = document.querySelector(`.peg[data-i="${i}"]`); if (!peg) return; peg.classList.remove('bump'); void peg.offsetWidth; peg.classList.add('bump') }
 
@@ -455,6 +463,7 @@ let photo = null
 function showResult() {
   mode = 'result'
   Snd.loop('wind', null); Snd.loop('bgm', null)
+  if (m.mode === 'flee') return showFleeResult()
   const rk = ranking(m), myRank = rk.indexOf(me()) + 1
   drawPodium($('podium'), rk, myRank)
   const R = T[lang]
@@ -470,6 +479,22 @@ function showResult() {
   show('result')
   $('result').classList.remove('play'); void $('result').offsetWidth; $('result').classList.add('play')
   window.__lastRank = myRank
+}
+// 逃げるだけの結果: 残った本数が主役
+function showFleeResult() {
+  const R = T[lang], p = me(), ok = p.tails > 0
+  drawPodium($('podium'), ranking(m), 1)
+  $('rankBig').textContent = ok ? R.fleeWin : R.fleeLose
+  $('rankBig').className = 'rank-big ' + (ok ? 'r1' : 'r4')
+  const air = Math.round(p.airT / Math.max(1, m.t) * 100)
+  $('stats').innerHTML = `<span>${R.statLeft} <b>${R.tails(p.tails)}</b></span><span>${R.statLost} <b>${p.lost}</b></span><span>${R.statAir} <b>${air}%</b></span>`
+  $('verdict').textContent = R.verdict[air > 85 ? 0 : air > 65 ? 1 : air > 40 ? 2 : 3]
+  sfx(ok ? (p.tails >= 3 ? 'win' : 'mid') : 'lose', { vol: 0.8 }); if (ok && p.tails >= 3) sfx('clap', { vol: 0.6, delay: 0.4 })
+  $('btnPost').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(R.postFlee(p.tails, ok)) + '&url=' + encodeURIComponent(URL_)
+  $('touch').classList.add('hidden')
+  show('result')
+  $('result').classList.remove('play'); void $('result').offsetWidth; $('result').classList.add('play')
+  window.__lastRank = ok ? 1 : 4; window.__lastTails = p.tails
 }
 // 表彰台（保存用の画像も同じ絵）。台の上の物干し竿に、手ぬぐいを本数ぶん干す
 function drawPodium(cv, rk, myRank) {
@@ -514,7 +539,8 @@ function drawPodium(cv, rk, myRank) {
 $('btnSave').onclick = () => { $('podium').toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'tail-tag-result.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000) }) }
 $('btnStart').onclick = () => startMatch()
 // 相手の強さ（既定は かんたん）
-function applyLevel() { for (const b of document.querySelectorAll('#level button')) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(b.dataset.lv === level)) } }
+function applyLevel() { for (const b of document.querySelectorAll('#level button')) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(b.dataset.lv === level)) } for (const b of document.querySelectorAll('#modeSel button')) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(b.dataset.md === gmode)) } }
+for (const b of document.querySelectorAll('#modeSel button')) b.onclick = () => { gmode = b.dataset.md; store.set('tt.mode', gmode); applyLevel() }
 for (const b of document.querySelectorAll('#level button')) b.onclick = () => { level = b.dataset.lv; store.set('tt.level', level); applyLevel() }
 applyLevel()
 $('btnAgain').onclick = () => startMatch()
@@ -705,7 +731,7 @@ function render(dt) {
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.tt = {
-  get mode() { return mode }, log, get m() { return m }, get me() { return me() }, TAG, RUN, world, camera, touchMode, COLORS, rayHit, cam, get level() { return level }, setLevel: l => { level = l; applyLevel() }, lockTarget: () => m && lockTarget(m, me()),
+  get mode() { return mode }, log, get m() { return m }, get me() { return me() }, TAG, RUN, world, camera, touchMode, COLORS, rayHit, cam, get level() { return level }, setLevel: l => { level = l; applyLevel() }, get gmode() { return gmode }, setMode: md => { gmode = md; applyLevel() }, lockTarget: () => m && lockTarget(m, me()),
   start: seed => startMatch(seed), toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
@@ -717,4 +743,15 @@ window.tt = {
 applyLang()
 toTitle()
 requestAnimationFrame(frame)
-setTimeout(() => { $('boot').classList.add('hidden'); window.__ttReady = true }, 50)
+window.__jsUp = true
+// ロード画面: 本物の読み込み（人物・空・質感）に合わせて進み、全部そろったら消す。遅い回線でも12秒で必ず消す
+{
+  let shown = 0, done = false
+  const set = p => { shown = Math.max(shown, Math.min(1, p)); $('boot').style.setProperty('--p', shown.toFixed(3)) }
+  THREE.DefaultLoadingManager.onProgress = (u, l, n) => set(0.1 + 0.85 * l / Math.max(1, n))
+  const finish = () => { if (done) return; done = true; set(1); setTimeout(() => { $('boot').classList.add('out'); setTimeout(() => $('boot').classList.add('hidden'), 360); window.__ttReady = true }, 220) }
+  set(0.06)
+  const skyP = new Promise(ok => { const k = setInterval(() => { if (skyReady) { clearInterval(k); ok() } }, 60) })
+  Promise.all([loadCharAssets().catch(() => {}), skyP]).then(finish)
+  setTimeout(finish, 12000)
+}

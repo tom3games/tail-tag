@@ -5,7 +5,7 @@
 // - 通りの地面（屋上・壁は別）に居続けると、しっぽが光ってばれる。光っている人は取られやすい（向かう速さで負ける）
 // - 電柱の上の方に、落ちているしっぽが下がっている。地面からは届かない（飛ばないと取れない）
 // - 3分（時間で昼→夕方→夜）。終わった時に持っている本数で順位
-import { RUN } from './runner.js?v=6'
+import { RUN } from './runner.js?v=7'
 
 export const TAG = {
   sec: 180,
@@ -41,12 +41,16 @@ export const COLORS = [
 
 function rng(seed) { let s = (seed >>> 0) || 1; return () => (s = (s * 16807) % 2147483647) / 2147483647 }
 
-export function createMatch(world, runners, seed = 1, level = 'normal') {
+// mode: 'tag'（取り合い）／'flee'（逃げるだけ。2026-11-03 本人「一方的に逃げるだけのモード。しっぽが4つぐらいあって逃げるだけ」）
+//   flee: 自分だけ4本、CPU 3人は0本で自分だけを追う。CPU が取ったしっぽは消える（CPU は持たない）。電柱の手ぬぐいは自分だけ拾える。0本になるか時間で終わり
+export const FLEE = { tails: 4, maxTails: 6 }
+export function createMatch(world, runners, seed = 1, level = 'normal', mode = 'tag') {
   const r = rng(seed)
   const lv = TAG.levels[level] || TAG.levels.normal
   runners.forEach((rn, i) => { if (i > 0) rn.speedMul = lv.cpuSpeed })
-  const players = runners.map((rn, i) => ({ i, id: COLORS[i].id, r: rn, tails: 1, steals: 0, lost: 0, picks: 0, groundT: 0, glow: false, immune: 0, cd: {}, airT: 0, groundSum: 0 }))
-  const m = { t: 0, over: false, players, free: [], freeT: 3, events: [], rnd: r, world, seed, level, lv }
+  const flee = mode === 'flee'
+  const players = runners.map((rn, i) => ({ i, id: COLORS[i].id, r: rn, tails: flee ? (i === 0 ? FLEE.tails : 0) : 1, steals: 0, lost: 0, picks: 0, groundT: 0, glow: false, immune: 0, cd: {}, airT: 0, groundSum: 0 }))
+  const m = { t: 0, over: false, players, free: [], freeT: 3, events: [], rnd: r, world, seed, level, lv, mode }
   return m
 }
 
@@ -92,10 +96,14 @@ export function stepMatch(m, dt) {
     if (B.i === 0 && sb > 2) sb += m.lv.meBonus
     sa -= A.glow ? 6 : 0; sb -= B.glow ? 6 : 0
     let thief = sa >= sb ? A : B, victim = thief === A ? B : A
+    if (m.mode === 'flee') { if (A.i === 0) { thief = B; victim = A } else if (B.i === 0) { thief = A; victim = B } else continue }
     const sv = Math.max(sa, sb)
-    if (sv < TAG.minApproach || victim.tails <= 0 || victim.immune > 0 || thief.cd[victim.i] > 0) continue
+    // 逃げるだけ: 追手は自分に触れたら止まっていても取る（地面で立ち止まれば安全、にしない）
+    const grab = m.mode === 'flee' && victim.i === 0 && thief.i !== 0
+    if ((!grab && sv < TAG.minApproach) || victim.tails <= 0 || victim.immune > 0 || thief.cd[victim.i] > 0) continue
     victim.tails--; victim.lost++; victim.immune = victim.i === 0 ? m.lv.meImmune : TAG.immune
-    thief.tails++; thief.steals++; thief.cd[victim.i] = TAG.sameCd; thief.immune = Math.max(thief.immune, TAG.thiefImmune)
+    if (m.mode !== 'flee') thief.tails++   // 逃げるだけでは CPU は取ったしっぽを持たない（ずっと追い続ける）
+    thief.steals++; thief.cd[victim.i] = TAG.sameCd; thief.immune = Math.max(thief.immune, TAG.thiefImmune)
     // 取られた方は少しはじかれる（同じ所でもみ合わない）
     victim.r.vx += (victim === B ? nx : -nx) * 5; victim.r.vz += (victim === B ? nz : -nz) * 5; victim.r.vy += 2
     m.events.push({ t: 'steal', by: thief.i, from: victim.i, x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2, z: (ca.z + cb.z) / 2 })
@@ -120,6 +128,7 @@ export function stepMatch(m, dt) {
     const f = m.free[k]
     for (const p of P) {
       const c = chest(p)
+      if (m.mode === 'flee' && (p.i !== 0 || p.tails >= FLEE.maxTails)) continue   // 逃げるだけ: 拾えるのは自分だけ
       if (Math.hypot(c.x - f.x, c.y - f.y, c.z - f.z) < TAG.freeR) {
         p.tails++; p.picks++
         m.free.splice(k, 1); m.freeT = TAG.freeEvery
@@ -128,7 +137,8 @@ export function stepMatch(m, dt) {
       }
     }
   }
-  if (m.t >= TAG.sec) { m.over = true; m.events.push({ t: 'end' }) }
+  if (m.mode === 'flee' && P[0].tails <= 0) { m.over = true; m.events.push({ t: 'end', down: true }); return }
+  if (m.t >= TAG.sec) { m.over = true; m.events.push({ t: 'end', escaped: m.mode === 'flee' }) }
 }
 
 // ワイヤーボタンの狙い（自分と、人のまねをする bot が使う）: 届く距離の中で一番近い「取れる相手」か落ちている手ぬぐい。無ければ null

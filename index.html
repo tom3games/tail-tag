@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rampart+One&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -29,6 +29,10 @@
   <div class="title-text">
     <h1 class="logo"><span data-t="logo"></span></h1>
     <p class="sub" data-t="sub"></p>
+  </div>
+  <div class="level mode-sel" id="modeSel" role="radiogroup">
+    <span class="lv-h" data-t="modeHead"></span>
+    <button data-md="tag" data-t="modeTag"></button><button data-md="flee" data-t="modeFlee"></button>
   </div>
   <div class="level" id="level" role="radiogroup">
     <span class="lv-h" data-t="lvHead"></span>
@@ -103,7 +107,7 @@
   </div>
 </section>
 
-<div id="boot" class="boot"><span data-t="loading">準備中…</span></div>
+<div id="boot" class="boot" style="--p:0"><div class="bt-scene" aria-hidden="true"><svg class="bt-line" viewBox="0 0 300 120"><path d="M6 20 Q150 48 294 20" fill="none" stroke="#e8e2d2" stroke-width="3"/><g class="bt-tw"><rect x="38" y="30" width="22" height="56" fill="#d8402c"/><rect x="38" y="38" width="22" height="4" fill="#fff" opacity=".85"/><rect x="38" y="76" width="22" height="4" fill="#fff" opacity=".85"/></g><g class="bt-tw"><rect x="98" y="38" width="22" height="56" fill="#2f6fd0"/><rect x="98" y="46" width="22" height="4" fill="#fff" opacity=".85"/><rect x="98" y="84" width="22" height="4" fill="#fff" opacity=".85"/></g><g class="bt-tw"><rect x="168" y="38" width="22" height="56" fill="#e8b021"/><rect x="168" y="46" width="22" height="4" fill="#fff" opacity=".85"/><rect x="168" y="84" width="22" height="4" fill="#fff" opacity=".85"/></g><g class="bt-tw"><rect x="232" y="30" width="22" height="56" fill="#3f9a52"/><rect x="232" y="38" width="22" height="4" fill="#fff" opacity=".85"/><rect x="232" y="76" width="22" height="4" fill="#fff" opacity=".85"/></g></svg></div><p class="bt-msg" data-t="loading">手ぬぐいを干しています</p><div class="bt-bar"><i></i></div></div>
 
 <script>
 // 拡大を止める（ピンチ・ダブルタップ・Ctrl+ホイール）。iOS は user-scalable=no を無視するので JS でも止める
@@ -122,14 +126,14 @@
   window.addEventListener('error',function(e){errs.push((e.message||'error')+' @'+(e.filename||'')+':'+(e.lineno||''))});
   window.addEventListener('unhandledrejection',function(e){errs.push('reject: '+(e.reason&&e.reason.message||e.reason))});
   setTimeout(function(){
-    if(window.__ttReady) return;
+    if(window.__jsUp) return;
     var d=document.createElement('div');d.id='boot-err';
     d.textContent='起動できませんでした / failed to start\n'+(errs.join('\n')||'(no error captured)')+'\n'+navigator.userAgent;
     document.body.appendChild(d);
   },9000);
 })();
 </script>
-<script src="sfx.js?v=6"></script>
-<script type="module" src="js/game.js?v=6"></script>
+<script src="sfx.js?v=7"></script>
+<script type="module" src="js/game.js?v=7"></script>
 </body>
 </html>

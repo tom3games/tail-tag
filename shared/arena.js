@@ -2,8 +2,9 @@
 // 2026-11-02 本人「ワイヤーをもっと使わせたい。地面にいたらダメ。電柱とか掛けられる場所を増やして」
 const K = 130 / 80
 const X = x => x * K, Z = z => 40 + (z - 40) * K
-export const AREA = { x0: X(-160), x1: X(160), z0: Z(360), z1: Z(520) }   // 約 520m x 260m
-const XS = [-160, -80, 0, 80, 160].map(X), ZS = [360, 440, 520].map(Z)
+// 2026-11-03 本人「ワールド狭すぎる。もうちょっとだけ広げて」→ 520m x 260m から約 780m x 390m に
+export const AREA = { x0: X(-240), x1: X(240), z0: Z(360), z1: Z(600) }
+const XS = [-240, -160, -80, 0, 80, 160, 240].map(X), ZS = [360, 440, 520, 600].map(Z)
 const WIDE_X = new Set([0]), WIDE_Z = new Set()
 const roadW = (axis, v) => (axis === 'x' ? WIDE_X.has(v) : WIDE_Z.has(v)) ? 28 : 18
 export const POLE_H = 10.5

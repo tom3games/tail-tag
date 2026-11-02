@@ -21,6 +21,8 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .logo span{display:inline-block;transform:rotate(-2.5deg);transform-origin:0 100%}
 .sub{margin-top:10px;font-size:15px;font-weight:700;line-height:1.5;max-width:20em;text-shadow:0 1px 8px rgba(0,0,0,.7)}
 /* 強さ: 物干しの洗濯ばさみに手ぬぐいが下がる見た目。選んだものだけ手ぬぐいの色がつく */
+.mode-sel{margin-top:auto;padding-top:10px}
+.mode-sel + .level{margin-top:6px}
 .level{margin-top:auto;display:flex;align-items:flex-end;gap:10px;padding-top:14px;border-top:2px solid rgba(255,255,255,.55);width:max-content;max-width:100%}
 .level .lv-h{font-size:13px;font-weight:700;color:#fff;align-self:center;margin-right:2px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
 .level button{position:relative;font-weight:900;font-size:15px;color:#fff;padding:14px 10px 6px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
@@ -138,3 +140,20 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 /* 方角だけの矢印（画面の上の真ん中に固定。2026-11-03） */
 #arrow{left:50%;top:max(118px,calc(env(safe-area-inset-top) + 110px))}
 @media (orientation:landscape) and (max-height:500px){#arrow{top:max(70px,calc(env(safe-area-inset-top) + 62px))}}
+
+/* ロード画面（ゲームの雰囲気。2026-11-03 本人「読み込みが遅い。いい感じのロード中の画面を」） */
+#boot{flex-direction:column;gap:14px;background:radial-gradient(ellipse at 50% 30%,#2b3358,#141a30 70%);transition:opacity .35s}
+#boot.out{opacity:0}
+.bt-scene{width:min(78vw,340px)}
+.bt-line{width:100%;height:auto;overflow:visible}
+.bt-tw{transform-box:fill-box;transform-origin:50% 0;opacity:.12;transition:opacity .3s}
+.bt-tw:nth-child(2){opacity:calc(.12 + .88 * min(1, max(0, var(--p) * 4 - 0)))}
+.bt-tw:nth-child(3){opacity:calc(.12 + .88 * min(1, max(0, var(--p) * 4 - 1)))}
+.bt-tw:nth-child(4){opacity:calc(.12 + .88 * min(1, max(0, var(--p) * 4 - 2)))}
+.bt-tw:nth-child(5){opacity:calc(.12 + .88 * min(1, max(0, var(--p) * 4 - 3)))}
+.bt-tw{animation:btflap 1.4s ease-in-out infinite}.bt-tw:nth-child(3){animation-delay:-.35s}.bt-tw:nth-child(4){animation-delay:-.7s}.bt-tw:nth-child(5){animation-delay:-1s}
+@keyframes btflap{0%,100%{transform:rotate(-5deg) skewY(2deg)}50%{transform:rotate(6deg) skewY(-3deg)}}
+.bt-msg{margin:0;font-weight:900;font-size:17px;letter-spacing:.06em;color:#f3efe4}
+.bt-bar{width:min(60vw,220px);height:4px;background:rgba(255,255,255,.18);border-radius:2px;overflow:hidden}
+.bt-bar i{display:block;height:100%;width:calc(var(--p) * 100%);background:#e8e2d2;transition:width .25s}
+#boot.out{pointer-events:none}

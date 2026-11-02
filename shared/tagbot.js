@@ -1,7 +1,7 @@
 // CPU のしっぽ取り（WIRE ESCAPE の runnerbot と同じ考え方: 行きたい向きの前の建物・電柱にワイヤーを掛けてつなぐ）
 // 性格: cpu（skill 0〜1 で強さ）／検証用: skilled（上手い人）・sloppy（下手な人: 反応が遅く狙いが雑）・ground（地面だけ走る手抜き）・idle（何もしない）
-import { findAnchor, RUN } from './runner.js?v=6'
-import { TAG, lockTarget } from './tag.js?v=6'
+import { findAnchor, RUN } from './runner.js?v=7'
+import { TAG, lockTarget } from './tag.js?v=7'
 
 const ang = a => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a }
 
@@ -22,7 +22,7 @@ function pickGoal(b, p, m) {
     const s = d - (o.glow ? 60 : 0) - o.tails * 6 + (o.i === 0 && b.kind === 'cpu' ? 10 : 0)
     if (s < bs) { bs = s; best = { kind: 'p', o } }
   }
-  for (const f of m.free) {
+  for (const f of (m.mode === 'flee' ? [] : m.free)) {   // 逃げるだけでは CPU は電柱の手ぬぐいを拾わない
     const d = Math.hypot(f.x - r.x, f.y - r.y, f.z - r.z)
     const s = d - 12
     if (s < bs) { bs = s; best = { kind: 'f', f } }
@@ -41,6 +41,17 @@ export function botInput(b, p, m, world, dt) {
   }
   // 逃げる: 2本以上持っていて、近くの誰かが速く向かってくる
   let gx, gy, gz
+  // 逃げる bot（逃げるだけモードの検証用）: 近い追手ほど強く避ける向きへ、高い所へ。fleeSloppy は反応が遅くぶれる
+  if (b.kind === 'flee' || b.kind === 'fleeSloppy') {
+    let ax = 0, az = 0
+    for (const o of m.players) { if (o === p) continue; const dx = r.x - o.r.x, dz = r.z - o.r.z, d = Math.hypot(dx, dz) || 1; const w = 1 / Math.max(8, d) ** 2; ax += dx / d * w; az += dz / d * w }
+    // 端に追い込まれないよう真ん中へ少し寄せる
+    const B = world.bounds, mx = (B.x0 + B.x1) / 2 - r.x, mz = (B.z0 + B.z1) / 2 - r.z, ml = Math.hypot(mx, mz) || 1
+    ax += mx / ml * 0.0006; az += mz / ml * 0.0006
+    const al = Math.hypot(ax, az) || 1
+    gx = r.x + ax / al * 45; gz = r.z + az / al * 45; gy = r.y + 6
+    if (b.kind === 'fleeSloppy') { b.delay.push([gx, gy, gz]); if (b.delay.length > 30) [gx, gy, gz] = b.delay.shift(); b.noiseT -= dt; if (b.noiseT <= 0) { b.noise = (b.rnd() - 0.5) * 1.6; b.noiseT = 0.6 + b.rnd() } }
+  } else {
   const chaser = p.tails >= 2 && m.players.find(o => o !== p && Math.hypot(o.r.x - r.x, o.r.z - r.z) < 16 && ((r.x - o.r.x) * o.r.vx + (r.z - o.r.z) * o.r.vz) / Math.max(1, Math.hypot(r.x - o.r.x, r.z - o.r.z)) > 7)
   if (chaser && b.skill > 0.3) { gx = r.x + (r.x - chaser.r.x) * 3; gz = r.z + (r.z - chaser.r.z) * 3; gy = r.y + 8 }
   else if (b.tgt && b.tgt.kind === 'p') {
@@ -49,6 +60,7 @@ export function botInput(b, p, m, world, dt) {
     gx = o.x + o.vx * lead; gz = o.z + o.vz * lead; gy = o.y + o.vy * lead * 0.5
   } else if (b.tgt) { gx = b.tgt.f.x; gz = b.tgt.f.z; gy = b.tgt.f.y - 1.1 }
   else { gx = (world.bounds.x0 + world.bounds.x1) / 2; gz = (world.bounds.z0 + world.bounds.z1) / 2; gy = 0 }
+  }
   // 下手な人: 反応が遅い（0.35秒前の目標を追う）・ぶれる
   if (b.kind === 'sloppy') {
     b.delay.push([gx, gy, gz]); if (b.delay.length > 21) [gx, gy, gz] = b.delay.shift()
@@ -56,7 +68,7 @@ export function botInput(b, p, m, world, dt) {
   }
   b.goal = { x: gx, y: gy, z: gz }
   const dh = Math.hypot(gx - r.x, gz - r.z)
-  const want = Math.atan2(gx - r.x, gz - r.z) + (b.kind === 'sloppy' ? b.noise : 0)
+  const want = Math.atan2(gx - r.x, gz - r.z) + (b.kind === 'sloppy' || b.kind === 'fleeSloppy' ? b.noise : 0)
   const diff = ang(want - r.yaw)
   inp.steer = Math.max(-1, Math.min(1, -diff * 2.5))
   inp.throttle = Math.abs(diff) > 1.8 && r.grounded ? 0.35 : 1
@@ -67,6 +79,17 @@ export function botInput(b, p, m, world, dt) {
     inp.climbX = Math.max(-1, Math.min(1, ((gx - r.x) * tx + (gz - r.z) * tz) / 6))
     const away = (gx - r.x) * cl.nx + (gz - r.z) * cl.nz > 4
     if (b.kind !== 'ground' && (away || (inp.climbY === 0 && dh > 10))) { inp.jump = !b.prevJ; b.prevJ = inp.jump; return inp }
+  }
+  // 地面にいる相手のそばでは、ワイヤーで飛び越さずに降りて走って詰める（地面で待てば安全、にしない）
+  const tgR = b.tgt && b.tgt.kind === 'p' ? b.tgt.o.r : null
+  const groundChase = b.kind === 'cpu' && m.mode === 'flee' && tgR && tgR.grounded && dh < 22
+  if (groundChase) {
+    if (r.rope && !b.prevW) { inp.wire = true; b.prevW = true; return inp }
+    b.prevW = false
+    b.stuck = Math.hypot(r.x - b.lx, r.z - b.lz) < 0.04 && !r.climbing ? b.stuck + dt : 0
+    b.lx = r.x; b.lz = r.z
+    if (b.stuck > 0.8) { inp.jump = !b.prevJ; b.prevJ = inp.jump; b.stuck = 0 } else b.prevJ = false
+    return inp
   }
   // ワイヤー
   b.wT += dt

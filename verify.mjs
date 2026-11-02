@@ -114,7 +114,7 @@ await t('壁に張り付いたら上下左右に這える・何も押さなけ�
   return { up: +up.toFixed(1), side: +side.toFixed(1), down: +down.toFixed(1) }
 })
 await t('ワイヤーボタン: 地面から押すと前の上へ掛かり、もう一回で離して飛ぶ（相手は追わない）', () => {
-  const r = createRunner({ id: 'a', spawn: { x: B.x0 + 40, y: 0, z: (B.z0 + B.z1) / 2, yaw: 0 } })
+  const r = createRunner({ id: 'a', spawn: { x: CX - 60, y: 0, z: (B.z0 + B.z1) / 2, yaw: 0 } })
   step(r, {}, 20); step(r, { wire: true })
   const hooked = !!r.rope, up = r.rope ? r.rope.y - r.y : 0
   step(r, { throttle: 1 }, 40); const still = !!r.rope
@@ -172,11 +172,11 @@ await t('電柱の手ぬぐいは地面から跳んでも届かない', () => {
   const chest = top + 1.1, need = world.tailSpots[0].y - TAG.freeR
   expect(chest < need, JSON.stringify({ chest, need })); return { reach: +chest.toFixed(1), need: +need.toFixed(1) }
 })
-await t('bot: 上手い人が一番強く、地面だけ・何もしないは勝てない。下手な人もほぼ毎回1本は取る（12試合で0本は1回まで）', () => {
+await t('bot: 上手い人が一番強く、地面だけ・何もしないは勝てない。下手な人もほぼ毎回1本は取る（12試合で0本は2回まで。2026-11-03 範囲を広げた後）', () => {
   const out = execFileSync(process.execPath, ['tools/sim.mjs', '12'], { cwd: ROOT, encoding: 'utf8', timeout: 600000 })
   const get = k => { const l = out.split('\n').find(s => s.startsWith(k)); return { rank: +l.match(/順位 ([\d.]+)/)[1], wins: +l.match(/1位 (\d+)/)[1], none: +l.match(/1本も取れず (\d+)/)[1], tails: +l.match(/本数 ([\d.]+)/)[1] } }
   const r = { skilled: get('skilled'), sloppy: get('sloppy'), ground: get('ground'), idle: get('idle') }
-  expect(r.skilled.rank < r.sloppy.rank && r.sloppy.rank < r.ground.rank && r.ground.wins === 0 && r.idle.wins === 0 && r.sloppy.none <= 1 && r.skilled.rank <= 2.3, JSON.stringify(r))
+  expect(r.skilled.rank < r.sloppy.rank && r.sloppy.rank < r.ground.rank && r.ground.wins === 0 && r.idle.wins === 0 && r.sloppy.none <= 2 && r.skilled.rank <= 2.3, JSON.stringify(r))
   return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, `順位${v.rank} 1位${v.wins} 本数${v.tails}`]))
 })
 await t('かんたん（既定）: 不慣れな人（反応0.6秒遅れ・狙いがぶれる・ボタンだけ）でも平均2位以内・毎回1本は取る。地面だけは勝てない', () => {
@@ -185,6 +185,22 @@ await t('かんたん（既定）: 不慣れな人（反応0.6秒遅れ・狙い
   const b = get(run('beginner'), 'beginner'), g = get(run('ground'), 'ground')
   expect(b.rank <= 2.0 && b.none === 0 && g.rank >= 3, JSON.stringify({ b, g }))
   return { beginner: `順位${b.rank} 1位${b.wins}`, ground: `順位${g.rank}` }
+})
+await t('逃げるだけ: 自分だけ4本・CPU は0本・取られても CPU は持たない・0本で終わる', () => {
+  const B2 = world.bounds, cx = (B2.x0 + B2.x1) / 2, cz = (B2.z0 + B2.z1) / 2
+  const rs = [[cx, cz], [cx + 1.5, cz], [cx + 60, cz], [cx - 60, cz]].map(([x, z], i) => createRunner({ id: 'p' + i, spawn: { x, y: 0, z } }))
+  const m = createMatch(world, rs, 1, 'normal', 'flee')
+  const start = m.players.map(p => p.tails).join()
+  m.t = 10; stepMatch(m, 1 / 60)
+  const after = m.players.map(p => p.tails).join()
+  for (let k = 0; k < 4; k++) { m.players[0].immune = 0; m.players[1].cd = {}; Object.assign(m.players[1].r, { x: cx + 1.5, z: cz, y: 0 }); stepMatch(m, 1 / 60) }
+  expect(start === '4,0,0,0' && after === '3,0,0,0' && m.over && m.players[0].tails === 0, JSON.stringify({ start, after, over: m.over, left: m.players[0].tails })); return { start, after }
+})
+await t('逃げるだけ（8回ずつ・ふつう）: 逃げる bot は何もしない・地面だけより長く持つ。何もしないは1分以内に全部取られる', () => {
+  const out = execFileSync(process.execPath, ['tools/flee.mjs', '6'], { cwd: ROOT, encoding: 'utf8', timeout: 600000 })
+  const get = (lv, k) => { const l = out.split('\n').find(x => x.startsWith(lv.padEnd(6) + ' ' + k.padEnd(10))); const t = l.match(/時間 ([\d,]+)/)[1].split(',').map(Number); return t.reduce((a, b) => a + b, 0) / t.length }
+  const r = { flee: get('normal', 'flee'), sloppy: get('normal', 'fleeSloppy'), ground: get('normal', 'ground'), idle: get('normal', 'idle') }
+  expect(r.flee > r.ground * 2 && r.sloppy > r.ground * 2 && r.idle < 60 && r.ground < 60, JSON.stringify(r)); return r
 })
 await t('AI臭さチェック NG 0', () => {
   const out = execFileSync(process.execPath, [process.env.HOME + '/Desktop/claudecode/_shared/ai_tells.mjs', ROOT, '--json'], { encoding: 'utf8' })
@@ -195,6 +211,14 @@ await t('AI臭さチェック NG 0', () => {
 const browser = await chromium.launch({ ...MUTE_LAUNCH, args: [...MUTE_LAUNCH.args, ...GL] })
 const p = await open(browser)
 await t('起動時にエラーが出ない', async () => { expect(p.errs.length === 0, p.errs.join('|')) })
+await t('ロード画面: 開いた直後に雰囲気の絵と進み具合が出て、読み込みが終わると消える', async () => {
+  const q2 = await browser.newPage(); await q2.goto(URL0, { waitUntil: 'domcontentloaded' })
+  const first = await q2.evaluate(() => { const b = document.getElementById('boot'); return { shown: !b.classList.contains('hidden') && getComputedStyle(b).display !== 'none', svg: !!b.querySelector('svg'), bar: !!b.querySelector('.bt-bar') } })
+  await q2.waitForFunction(() => window.__ttReady, null, { timeout: 20000 }); await q2.waitForTimeout(500)
+  const last = await q2.evaluate(() => { const b = document.getElementById('boot'); return { hidden: b.classList.contains('hidden'), p: b.style.getPropertyValue('--p') } })
+  await q2.close()
+  expect(first.shown && first.svg && first.bar && last.hidden && +last.p === 1, JSON.stringify({ first, last })); return { first, last }
+})
 await t('ブラウザの拡大が起きない', async () => {
   const r = await p.evaluate(() => {
     const vp = document.querySelector('meta[name=viewport]').content
