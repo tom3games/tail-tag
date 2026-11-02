@@ -134,3 +134,7 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
   .result-actions{width:200px}
   .result-actions .row{flex-direction:column;gap:2px;align-items:center}
 }
+
+/* 方角だけの矢印（画面の上の真ん中に固定。2026-11-03） */
+#arrow{left:50%;top:max(118px,calc(env(safe-area-inset-top) + 110px))}
+@media (orientation:landscape) and (max-height:500px){#arrow{top:max(70px,calc(env(safe-area-inset-top) + 62px))}}

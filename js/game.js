@@ -1,18 +1,18 @@
 // 空中しっぽ取り。WIRE ESCAPE のワイヤーと街で、CPU 3人と腰の手ぬぐい（しっぽ）を取り合う
 // 地面に居続けるとしっぽが光ってばれる。3分で昼から夜になる。終わった時の本数で順位
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=5'
-import { createWorld } from '../shared/track.js?v=5'
-import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=5'
-import { buildScene } from './scene.js?v=5'
-import { FX } from './fx.js?v=5'
-import { loadSky, setAniso } from './look.js?v=5'
-import { Q } from './quality.js?v=5'
-import { RunnerModel } from './runnermodel.js?v=5'
-import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=5'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=5'
-import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=5'
-import { createBot, botInput } from '../shared/tagbot.js?v=5'
+import { GAME } from '../shared/config.js?v=6'
+import { createWorld } from '../shared/track.js?v=6'
+import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=6'
+import { buildScene } from './scene.js?v=6'
+import { FX } from './fx.js?v=6'
+import { loadSky, setAniso } from './look.js?v=6'
+import { Q } from './quality.js?v=6'
+import { RunnerModel } from './runnermodel.js?v=6'
+import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=6'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=6'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=6'
+import { createBot, botInput } from '../shared/tagbot.js?v=6'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -403,21 +403,21 @@ function updateHud(dt) {
   if (lt) { lockRing.position.set(lt.x, lt.y + (lt.free ? 1.6 : 2.2), lt.z); lockRing.material.color.set(gc); const k = performance.now() / 1000; lockRing.rotation.set(Math.PI / 2, 0, k * 2); lockRing.scale.setScalar(1 + Math.sin(k * 6) * 0.08) }
   const ar = $('arrow')
   if (!goal) { ar.classList.add('hidden'); return }
-  const p = _v.copy(goal).project(camera)
-  const W = innerWidth, H = innerHeight, behind = p.z > 1
-  let sx = (p.x * 0.5 + 0.5) * W, sy = (-p.y * 0.5 + 0.5) * H
-  const off = behind || sx < 30 || sx > W - 30 || sy < 70 || sy > H - 30
+  if (onScreen(goal.x, goal.y, goal.z)) { ar.classList.add('hidden'); return }   // 見えている時は出さない
   ar.classList.remove('hidden'); ar.style.setProperty('--c', gc)
   $('arrowD').textContent = Math.round(Math.hypot(goal.x - r.x, goal.z - r.z)) + 'm'
-  if (!off) { ar.style.left = sx + 'px'; ar.style.top = Math.max(80, sy - 30) + 'px'; ar.querySelector('svg').style.transform = 'rotate(180deg)' }
-  else {
-    let dx = sx - W / 2, dy = sy - H / 2
-    if (behind) { dx = -dx; dy = -dy; if (Math.abs(dy) < 1) dy = H }
-    const k = Math.min((W / 2 - 40) / Math.abs(dx || 1e-6), (H / 2 - 90) / Math.abs(dy || 1e-6))
-    ar.style.left = (W / 2 + dx * k) + 'px'; ar.style.top = (H / 2 + dy * k) + 'px'
-    ar.querySelector('svg').style.transform = `rotate(${Math.atan2(dx, -dy)}rad)`
-  }
+  placeCompass(ar, compassAngle(goal.x, goal.z, r))
 }
+// 矢印は方角だけ（2026-11-03 本人「高さを表すと分かりづらい。方角だけでいい」）: カメラの前を上として、目標の水平の向きへ回す。画面の上の真ん中に固定
+function compassAngle(tx, tz, r) {
+  const e = camera.matrixWorld.elements
+  let rx = e[0], rz = e[2], fx = -e[8], fz = -e[10]; const a = Math.hypot(rx, rz) || 1, b = Math.hypot(fx, fz) || 1; rx /= a; rz /= a; fx /= b; fz /= b
+  const dx = tx - r.x, dz = tz - r.z
+  return Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz)
+}
+function onScreen(x, y, z) { const p = _v.set(x, y, z).project(camera), W = innerWidth, H = innerHeight; const sx = (p.x * 0.5 + 0.5) * W, sy = (-p.y * 0.5 + 0.5) * H; return p.z < 1 && sx > 30 && sx < W - 30 && sy > 70 && sy < H - 30 }
+function placeCompass(el, ang) { el.style.left = '50%'; el.style.top = ''; el.querySelector('svg').style.transform = `rotate(${ang}rad)`; window.__compass = window.__compass || {}; window.__compass[el.id] = ang }
+
 
 // ---------------------------------------------------------------- 出来事
 const log = []
