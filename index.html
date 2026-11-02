@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rampart+One&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=5">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -57,6 +57,7 @@
 </section>
 
 <!-- 遊び中: 上に物干しロープ（点数）と時計 -->
+<canvas id="speedfx"></canvas><div id="hitflash"></div>
 <section id="hud" class="hidden">
   <div class="rope-bar">
     <div id="line" class="line"></div>
@@ -128,7 +129,7 @@
   },9000);
 })();
 </script>
-<script src="sfx.js?v=2"></script>
-<script type="module" src="js/game.js?v=4"></script>
+<script src="sfx.js?v=5"></script>
+<script type="module" src="js/game.js?v=5"></script>
 </body>
 </html>

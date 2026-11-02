@@ -1,18 +1,18 @@
 // 空中しっぽ取り。WIRE ESCAPE のワイヤーと街で、CPU 3人と腰の手ぬぐい（しっぽ）を取り合う
 // 地面に居続けるとしっぽが光ってばれる。3分で昼から夜になる。終わった時の本数で順位
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js'
-import { createWorld } from '../shared/track.js'
-import { setupArena, AREA, POLE_H } from '../shared/arena.js'
-import { buildScene } from './scene.js'
-import { FX } from './fx.js'
-import { loadSky, setAniso } from './look.js'
-import { Q } from './quality.js'
-import { RunnerModel } from './runnermodel.js'
-import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js'
-import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js'
-import { createBot, botInput } from '../shared/tagbot.js'
+import { GAME } from '../shared/config.js?v=5'
+import { createWorld } from '../shared/track.js?v=5'
+import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=5'
+import { buildScene } from './scene.js?v=5'
+import { FX } from './fx.js?v=5'
+import { loadSky, setAniso } from './look.js?v=5'
+import { Q } from './quality.js?v=5'
+import { RunnerModel } from './runnermodel.js?v=5'
+import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=5'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=5'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=5'
+import { createBot, botInput } from '../shared/tagbot.js?v=5'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -216,6 +216,7 @@ aimMark.renderOrder = 5; aimMark.visible = false; scene.add(aimMark)
 let mode = 'title'        // title | play | result
 let m = null, bots = [], models = []
 let paused = false, dbgPause = false, endAt = 0
+let hitStop = 0, fovKick = 0, flashA = 0   // 取った瞬間に少し止める・視野を一瞬動かす・光る
 const cam = { hd: 0, pitch: 0.15, userT: -1e9, pos: new THREE.Vector3(), off: new THREE.Vector3(-6, 3, 0), look: new THREE.Vector3(), lookOff: new THREE.Vector3(), fov: 64 }
 const _v = new THREE.Vector3(), _w = new THREE.Vector3()
 // ワイヤーボタンが向かう相手の目印（頭の上の輪）
@@ -429,6 +430,7 @@ function onRunnerEvent(e) {
     if (e.far && tp && tp.sx != null) { const el = $('miss'); el.style.left = tp.sx + 'px'; el.style.top = tp.sy + 'px'; el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; clearTimeout(el._t); el._t = setTimeout(() => el.classList.add('hidden'), 800) }
   } else if (e.t === 'land') { sfx('land', { vol: Math.min(1, 0.3 + e.impact / 20) }); if (e.impact > 14) { sfx('bonk', { vol: 0.5 }); fx.addShake(Math.min(0.6, e.impact / 40)) } }
   else if (e.t === 'bonk') { sfx('bonk', { vol: 0.8 }); fx.addShake(0.4) }
+  else if (e.t === 'unwire' && !e.auto) { const r = me().r, v = Math.hypot(r.vx, r.vy, r.vz); if (v > 16) { sfx('whoosh', { vol: Math.min(0.8, v / 50), rate: 0.9 + Math.random() * 0.2 }); fovKick = Math.min(6, (v - 16) * 0.3) } }   // 速く離すと風を切る
 }
 function onMatchEvent(e) {
   log.push({ src: 'm', ...e, at: +m.t.toFixed(2) })
@@ -436,8 +438,8 @@ function onMatchEvent(e) {
   if (e.t === 'steal') {
     const col = new THREE.Color(COLORS[e.from].cloth).getHex()
     fx.debrisAt(e.x, e.y, e.z, 10, col, { speed: 4, up: 3, size: 0.1 })
-    if (e.by === 0) { sfx('grab', { vol: 1 }); sfx('ding', { vol: 0.6, delay: 0.12 }); say(t('got')(pname(e.from)), 1.6, 'good'); fx.addShake(0.25); bump(0) }
-    else if (e.from === 0) { sfx('grab', { vol: 0.8 }); sfx('lost', { vol: 0.9 }); say(t('lost')(pname(e.by)), 1.6, 'bad'); fx.addShake(0.35); bump(e.by) }
+    if (e.by === 0) { sfx('grab', { vol: 1 }); sfx('ding', { vol: 0.6, delay: 0.12 }); say(t('got')(pname(e.from)), 1.6, 'good'); fx.addShake(0.6); bump(0); hitStop = 0.09; fovKick = -7; flashA = 1; fx.debrisAt(e.x, e.y, e.z, 16, col, { speed: 9, up: 5, size: 0.12 }) }
+    else if (e.from === 0) { sfx('grab', { vol: 0.8 }); sfx('lost', { vol: 0.9 }); say(t('lost')(pname(e.by)), 1.6, 'bad'); fx.addShake(0.5); bump(e.by); hitStop = 0.06 }
     else { sfx('grab', { vol: 0.5 * near(e.x, e.z) }); if (sayT <= 0) say(t('cpuGot')(pname(e.by), pname(e.from)), 1.2, 'small'); bump(e.by) }
   } else if (e.t === 'pick') {
     if (e.by === 0) { sfx('pick', { vol: 0.8 }); sfx('grab'); say(t('pick'), 1.6, 'good'); bump(0) } else bump(e.by)
@@ -562,9 +564,14 @@ function updateCamera(dt, c, md) {
   camera.lookAt(cam.look)
   const asp = camera.aspect
   const base = asp >= 1 ? 60 : Math.min(84, 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(37)) / asp) * 180 / Math.PI)
-  const fov = base + Math.min(12, Math.hypot(c.vx, c.vy, c.vz) * 0.28)
+  const fov = base + Math.min(18, Math.max(0, Math.hypot(c.vx, c.vy, c.vz) - 6) * 0.5)   // 速いほど広く（12→18）
   cam.fov += (fov - cam.fov) * (1 - Math.exp(-dt * 4))
-  camera.fov = cam.fov; camera.updateProjectionMatrix()
+  fovKick *= Math.exp(-dt * 6)
+  camera.fov = cam.fov + fovKick; camera.updateProjectionMatrix()
+  // 振り子の向きに少しだけ体ごと傾く（横へ流れる速さから）
+  const me_ = camera.matrixWorld.elements, rl = Math.hypot(me_[0], me_[2]) || 1, lat = (c.vx * me_[0] + c.vz * me_[2]) / rl   // 画面の右向きの速さ
+  cam.bank = (cam.bank || 0) + (Math.max(-0.1, Math.min(0.1, (c.rope ? lat : 0) * -0.004)) - (cam.bank || 0)) * (1 - Math.exp(-dt * 3))
+  camera.rotateZ(cam.bank)
 }
 
 // ---------------------------------------------------------------- 昼→夕方→夜
@@ -615,9 +622,35 @@ function frame() {
   requestAnimationFrame(frame)
   const now = performance.now()
   let dt = Math.min(0.1, (now - last) / 1000); last = now
-  if (!dbgPause) { acc += dt; let n = 0; while (acc >= STEP && n < 6) { stepOnce(); acc -= STEP; n++ } if (n >= 6) acc = 0 }
+  if (hitStop > 0) { hitStop -= dt; acc = 0 }   // ヒットストップ: ほんの一瞬だけ止める
+  else if (!dbgPause) { acc += dt; let n = 0; while (acc >= STEP && n < 6) { stepOnce(); acc -= STEP; n++ } if (n >= 6) acc = 0 }
   else dt = 0
   render(dt || 0.016)
+}
+// 速さの線: 画面のふちから中心へ流れる白い線。速いほど多く濃く（20m/s から）
+const spd = document.getElementById('speedfx'), sctx = spd.getContext('2d'), hf = document.getElementById('hitflash')
+const lines = Array.from({ length: 46 }, () => ({ a: Math.random() * Math.PI * 2, p: Math.random(), s: 0.6 + Math.random() * 0.8, w: 1 + Math.random() * 2 }))
+let spdOn = false
+function drawSpeed(v, dt) {
+  flashA = Math.max(0, flashA - dt * 5); hf.style.opacity = flashA.toFixed(2)
+  const k = Math.max(0, Math.min(1, (v - 20) / 18))
+  window.__speedK = k
+  if (k <= 0) { if (spdOn) { sctx.clearRect(0, 0, spd.width, spd.height); spdOn = false } return }
+  spdOn = true
+  const W = innerWidth, H = innerHeight, dpr = Math.min(2, devicePixelRatio || 1)
+  if (spd.width !== Math.round(W * dpr) || spd.height !== Math.round(H * dpr)) { spd.width = Math.round(W * dpr); spd.height = Math.round(H * dpr) }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0); sctx.clearRect(0, 0, W, H)
+  const cx = W / 2, cy = H * 0.45, R = Math.hypot(W, H) * 0.55
+  sctx.lineCap = 'round'
+  const n = Math.round(lines.length * (0.35 + 0.65 * k))
+  for (let i = 0; i < n; i++) {
+    const L = lines[i]
+    L.p += dt * L.s * (1.6 + k * 2.4); if (L.p > 1) { L.p -= 1; L.a = Math.random() * Math.PI * 2 }
+    const r1 = R * (1.05 - L.p * 0.45), r0 = r1 - R * (0.12 + 0.2 * k) * L.s
+    const ca = Math.cos(L.a), sa = Math.sin(L.a)
+    sctx.strokeStyle = `rgba(255,255,255,${(0.1 + 0.32 * k) * Math.min(1, L.p * 4)})`; sctx.lineWidth = L.w
+    sctx.beginPath(); sctx.moveTo(cx + ca * r0, cy + sa * r0); sctx.lineTo(cx + ca * r1, cy + sa * r1); sctx.stroke()
+  }
 }
 function render(dt) {
   if (!m) return
@@ -648,9 +681,10 @@ function render(dt) {
   const r0 = m.players[0].r
   if (mode === 'play' && !touchMode && frameN % 4 === 0) aimMark.userData.p = findAnchor(world, r0)
   if (mode === 'play' && !touchMode && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position) }
-  if (mode === 'play') { const v3 = Math.hypot(r0.vx, r0.vy, r0.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = Math.min(0.5, Math.max(0, (v3 - 8) / 40)) }
+  if (mode === 'play') { const v3 = Math.hypot(r0.vx, r0.vy, r0.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = Math.min(0.75, Math.max(0, (v3 - 6) / 32)) }
   fx.update(dt)
   fx.shake = Math.max(0, fx.shake - dt * 2.5)
+  drawSpeed(mode === 'play' ? Math.hypot(r0.vx, r0.vy, r0.vz) : 0, dt)
   if (mode === 'play') {
     const tt = m.t
     if (hints.length && tt >= hints[0][0] && sayT <= 0) { say(t(hints[0][1]), 3.2); hints.shift() }   // ほかの知らせを上書きしない

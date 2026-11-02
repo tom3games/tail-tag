@@ -52,6 +52,9 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 
 /* ---------- 遊び中 ---------- */
 #hud{position:fixed;inset:0;z-index:5;pointer-events:none}
+/* 速さの線と、取った瞬間の光（2026-11-02 本人「爽快感・迫力が欲しい」） */
+#speedfx{position:fixed;inset:0;width:100%;height:100%;z-index:4;pointer-events:none}
+#hitflash{position:fixed;inset:0;z-index:4;pointer-events:none;background:radial-gradient(ellipse at center,rgba(255,255,255,0) 35%,rgba(255,244,214,.55) 100%);opacity:0}
 /* 物干しロープ: 4人の手ぬぐいの本数がそのまま点数 */
 .rope-bar{position:absolute;left:max(8px,env(safe-area-inset-left));right:max(60px,calc(env(safe-area-inset-right) + 54px));top:max(6px,env(safe-area-inset-top));display:flex;align-items:flex-start;gap:8px}
 .line{position:relative;flex:1;display:flex;justify-content:space-around;padding-top:9px;min-width:0}

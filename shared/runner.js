@@ -15,7 +15,7 @@
 // 座標は車と同じ（x=東西, z=南北, yaw=0 で +z を向く）。y は足の高さ。
 // 体力は dmg.body（車と同じ名前にして、警察と犯人の判定 chase.js をそのまま使う）
 
-import { GAME } from './config.js'
+import { GAME } from './config.js?v=5'
 
 export const RUN = {
   radius: 0.42, height: 1.75,
@@ -31,7 +31,7 @@ export const RUN = {
   crawl: 6,                     // 壁を這う速さ（左右）
   wireRange: 70,                // ワイヤーが届く距離
   wireMinUp: 3,                 // 掛ける点は自分よりこれ以上高い所
-  pump: 13,                     // スイング中に前へこぐ力
+  pump: 14,                     // スイング中に前へこぐ力（13→14.5。2026-11-02 本人「スイングもうちょっと早く。ほんまにちょっとだけ」）
   steerAssist: 2.2,             // スイング中、横へ流れる速さを向いている方へ寄せる（毎秒の割合）
   reel: 2.4,                    // 振り子の間、自動で巻き取る速さ（m/s）。回る勢いを保つので少しずつ速くなる。引き寄せはしない
   minRope: 6,
@@ -42,7 +42,8 @@ export const RUN = {
   zipAcc: 22,                   // 巻き取りの加速（48→22）
   zipCd: 1,                     // （使っていない。表示の割り算用）
   zipExit: 7.5,                 // 巻き取りの終わりに前と上へ飛び出す速さ
-  maxSpeed: 38,
+  maxSpeed: 41,                 // 38→41（同上）
+  ropeG: 1.07,                  // ワイヤー中だけ重力を少し強く（振り子が速く回る）
   releaseVyMax: 9,              // 外した瞬間の上向きの速さの上限（振るたびに空へ昇り続けないように）
   drag: 0.012,
   releaseKick: 1.2,             // ワイヤーを外した瞬間に上へ少し跳ねる
@@ -445,7 +446,7 @@ function release(r, byPlayer) {
 
 function physics(r, thr, dt, world, passive) {
   const R = RUN.radius
-  if (!r.climbing) r.vy -= RUN.gravity * dt
+  if (!r.climbing) r.vy -= RUN.gravity * (r.rope ? RUN.ropeG : 1) * dt
   // 空気の抵抗と最高速
   if (!r.grounded) { const k = 1 - RUN.drag * dt * Math.hypot(r.vx, r.vy, r.vz) * 0.1; r.vx *= k; r.vz *= k }
   const sp3 = Math.hypot(r.vx, r.vy, r.vz)
