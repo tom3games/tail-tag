@@ -1,18 +1,18 @@
 // 空中しっぽ取り。WIRE ESCAPE のワイヤーと街で、CPU 3人と腰の手ぬぐい（しっぽ）を取り合う
 // 地面に居続けるとしっぽが光ってばれる。3分で昼から夜になる。終わった時の本数で順位
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=7'
-import { createWorld } from '../shared/track.js?v=7'
-import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=7'
-import { buildScene } from './scene.js?v=7'
-import { FX } from './fx.js?v=7'
-import { loadSky, setAniso } from './look.js?v=7'
-import { Q } from './quality.js?v=7'
-import { RunnerModel } from './runnermodel.js?v=7'
-import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=7'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=7'
-import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=7'
-import { createBot, botInput } from '../shared/tagbot.js?v=7'
+import { GAME } from '../shared/config.js?v=8'
+import { createWorld } from '../shared/track.js?v=8'
+import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=8'
+import { buildScene } from './scene.js?v=8'
+import { FX } from './fx.js?v=8'
+import { loadSky, setAniso } from './look.js?v=8'
+import { Q } from './quality.js?v=8'
+import { RunnerModel } from './runnermodel.js?v=8'
+import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=8'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=8'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=8'
+import { createBot, botInput } from '../shared/tagbot.js?v=8'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -353,7 +353,7 @@ function toTitle() {
   mode = 'title'; paused = false
   newMatch(Math.floor(Math.random() * 1e6), true)
   cam.hd = 0; show('title'); $('touch').classList.add('hidden')
-  Snd.loop('bgm', 'snd/bgm_title.mp3', 0.2); Snd.loop('amb', 'snd/loop_highway.mp3', 0.12); Snd.loop('wind', null)
+  Snd.loop('bgm', 'snd/bgm_title.mp3', 0.2); Snd.loop('amb', 'snd/city_street_loop.wav', 0.22); Snd.loop('wind', null)
 }
 let hints = []
 function startMatch(seed = Math.floor(Math.random() * 1e6)) {
@@ -362,7 +362,7 @@ function startMatch(seed = Math.floor(Math.random() * 1e6)) {
   newMatch(seed, false); m.seed = seed
   cam.hd = me().r.yaw; cam.pitch = 0.15; cam.userT = -1e9
   show(null); $('touch').classList.toggle('hidden', !touchMode)
-  Snd.loop('bgm', 'snd/bgm_play.mp3', 0.15); Snd.loop('amb', 'snd/loop_highway.mp3', 0.14); Snd.loop('wind', 'snd/air_01.mp3', 0.0001)
+  Snd.loop('bgm', 'snd/bgm_play.mp3', 0.15); Snd.loop('amb', 'snd/city_street_loop.wav', 0.26); Snd.loop('wind', 'snd/wind_loop.wav', 0.0001)
   const seen = store.get('tt.tut') === '1'
   hints = seen ? [[1.0, touchMode ? 'hint1' : 'hint1Pc']] : [[1.0, touchMode ? 'hint1' : 'hint1Pc'], [7, gmode === 'flee' ? 'hintFlee' : 'hint2'], [16, 'hint3']]
   if (seen && gmode === 'flee') hints.push([5, 'hintFlee'])
@@ -707,7 +707,7 @@ function render(dt) {
   const r0 = m.players[0].r
   if (mode === 'play' && !touchMode && frameN % 4 === 0) aimMark.userData.p = findAnchor(world, r0)
   if (mode === 'play' && !touchMode && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position) }
-  if (mode === 'play') { const v3 = Math.hypot(r0.vx, r0.vy, r0.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = Math.min(0.75, Math.max(0, (v3 - 6) / 32)) }
+  if (mode === 'play') { const v3 = Math.hypot(r0.vx, r0.vy, r0.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = r0.grounded ? 0 : Math.min(0.35, Math.max(0, (v3 - 16) / 40)) /* 風: 地面では鳴らさない・空中で 16m/s から（2026-11-03 本人「謎の水の音がずっと鳴ってる」） */ }
   fx.update(dt)
   fx.shake = Math.max(0, fx.shake - dt * 2.5)
   drawSpeed(mode === 'play' ? Math.hypot(r0.vx, r0.vy, r0.vz) : 0, dt)

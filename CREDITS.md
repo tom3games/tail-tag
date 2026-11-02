@@ -1,7 +1,7 @@
 # CREDITS（素材の出所）
 
 ## 音（全部 CC0）
-- snd/loop_highway.mp3, snd/air_01.mp3, snd/metal_02.mp3, snd/footstep_0*.mp3: 100 CC0 SFX #2 / rubberduck
+- snd/metal_02.mp3, snd/footstep_0*.mp3: 100 CC0 SFX #2 / rubberduck
 - snd/swish-*.mp3: Swishes Sound Pack / artisticdude
 - snd/metalClick.mp3, snd/cloth*.mp3: 50 RPG sound effects / Kenney
 - snd/click_001.mp3, snd/tick_002.mp3, snd/error_004.mp3, snd/confirmation_002.mp3: Interface Sounds / Kenney
@@ -20,3 +20,5 @@
 
 ## 街・空・質感
 - WIRE ESCAPE / BREAK THE ROUTE と同じ（Poly Haven CC0 のテクスチャと HDRI、自作の建物）
+- snd/wind_loop.wav: Howling wind / Tvabutzku1234 / CC0（Wikimedia Commons。14秒の継ぎ目なしループ。空中で速い時の風）
+- snd/city_street_loop.wav: Sunday in the city street noise 1 / cori / Public domain（Wikimedia Commons。静かな通りの22.5秒ループ。街の環境音）
