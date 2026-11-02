@@ -60,11 +60,11 @@ const fit = q => q.evaluate(() => {
 const world = setupArena(createWorld('city'))
 const B = world.bounds, CX = (B.x0 + B.x1) / 2
 const step = (r, inp, n = 1) => { for (let i = 0; i < n; i++) { r.events.length = 0; stepRunner(r, inp, 1 / 60, world) } }
-await t('ワイヤー: 届く距離は70m。遠い所は×で外れ、別の所にも勝手に掛からない', () => {
+await t('ワイヤー: 届く距離は70m。遠い所を押すと、その向きの届く所に掛かり、届く距離より長くはならない', () => {
   const r = createRunner({ id: 'a', spawn: { x: 0, y: 0, z: 690, yaw: 0 } })
   step(r, { wire: true, wireAt: { x: 18, y: 40, z: 790 } })
-  const miss = r.events.find(e => e.t === 'wireMiss')
-  expect(!r.rope && miss && miss.far, JSON.stringify(r.events))
+  expect(r.rope && Math.hypot(r.rope.x - r.x, r.rope.y - r.y, r.rope.z - r.z) <= RUN.wireRange + 3, JSON.stringify(r.events))
+  const miss = { d: Math.hypot(18, 40, 100) }
   const r2 = createRunner({ id: 'b', spawn: { x: 0, y: 0, z: 690, yaw: 0 } })
   step(r2, { wire: true, wireAt: { x: 18, y: 30, z: 740 } })
   expect(r2.rope, 'near not attached'); return { far: Math.round(miss.d), nearLen: +r2.rope.len.toFixed(1), range: RUN.wireRange }
@@ -99,7 +99,7 @@ await t('飛ぶ方が走るより速い', () => {
   for (let i = 0; i < 600; i++) { const inp = { throttle: 1, wire: false }; if (!s.rope && (s.grounded || s.vy < -2) && !w) { inp.wire = true; w = true } else w = false; step(s, inp); if (!s.grounded) fly = Math.max(fly, Math.hypot(s.vx, s.vz)) }
   expect(fly > run * 1.6, JSON.stringify({ run, fly })); return { run: +run.toFixed(1), fly: +fly.toFixed(1) }
 })
-await t('壁に張り付いたら上下左右に這える・何も押さなければ止まる・跳ぶで離れる', () => {
+await t('壁に張り付いたら上下左右に這える・何も押さなければ止まる・ワイヤーボタンで離れる（跳ぶボタンは無い）', () => {
   const o = world.colliders.find(c => c.kind === 'building' && c.cx > B.x0 + 20 && c.cx < B.x1 - 20 && c.cz > B.z0 + 20 && c.cz < B.z1 - 20 && c.y1 > 40 && c.hw > 8)
   const r = createRunner({ id: 'a', spawn: { x: o.cx, y: 0, z: o.cz - o.hl - 1.5, yaw: 0 } })
   step(r, { throttle: 1 }, 30)
@@ -110,8 +110,27 @@ await t('壁に張り付いたら上下左右に這える・何も押さなけ�
   const y2 = r.y; step(r, { climbY: -1, climbX: 0 }, 30); const down = y2 - r.y
   const x1 = r.x; step(r, { climbY: 0, climbX: -1 }, 30); const left = Math.abs(x1 - r.x)
   expect(up > 4 && Math.abs(side) > 3 && still < 0.05 && down > 2 && left > 1.5 && r.climbing, JSON.stringify({ up, side, still, down, left, cl: !!r.climbing }))
-  step(r, { jump: true }); expect(!r.climbing, 'jump did not leave')
+  step(r, { wire: true }); step(r, {}); expect(!r.climbing && !r.rope && !r.grounded, JSON.stringify({ cl: !!r.climbing, rope: !!r.rope }))
   return { up: +up.toFixed(1), side: +side.toFixed(1), down: +down.toFixed(1) }
+})
+await t('ワイヤーボタン: 地面から押すと前の上へ掛かり、もう一回で離して飛ぶ（相手は追わない）', () => {
+  const r = createRunner({ id: 'a', spawn: { x: B.x0 + 40, y: 0, z: (B.z0 + B.z1) / 2, yaw: 0 } })
+  step(r, {}, 20); step(r, { wire: true })
+  const hooked = !!r.rope, up = r.rope ? r.rope.y - r.y : 0
+  step(r, { throttle: 1 }, 40); const still = !!r.rope
+  step(r, { wire: true }); step(r, {})
+  expect(hooked && up > 3 && still && !r.rope && !r.grounded, JSON.stringify({ hooked, up, still, rope: !!r.rope })); return { up: +up.toFixed(1) }
+})
+await t('遠すぎる所を押すと、その向きで届く所に掛かる（空中出前と同じ）', () => {
+  const r = createRunner({ id: 'a', spawn: { x: (B.x0 + B.x1) / 2, y: 0, z: (B.z0 + B.z1) / 2, yaw: 0 } })
+  step(r, {}, 10)
+  const w = { x: r.x + 60, y: 120, z: r.z + 160 }
+  step(r, { wire: true, wireAt: w })
+  const miss = r.events.find(e => e.t === 'wireMiss')
+  if (!r.rope) { expect(miss, 'no rope and no miss'); return { rope: false, miss: true } }
+  const d = Math.hypot(r.rope.x - r.x, r.rope.y - r.y, r.rope.z - r.z)
+  let yo = Math.atan2(r.rope.x - r.x, r.rope.z - r.z) - Math.atan2(60, 160); while (yo > Math.PI) yo -= 2 * Math.PI; while (yo < -Math.PI) yo += 2 * Math.PI
+  expect(d <= RUN.wireRange + 3 && Math.abs(yo) < 1.6, JSON.stringify({ d, yo })); return { d: Math.round(d) }
 })
 await t('電柱・街灯にもワイヤーが掛かる（狙いが少しずれても吸いつく）', () => {
   const p = world.poles[10]
@@ -195,7 +214,7 @@ await t('始める: 物干しに4人の手ぬぐいが1本ずつ・時計が3:00
   const r = await p.evaluate(() => ({ pegs: [...document.querySelectorAll('.peg')].map(e => e.querySelectorAll('.towels i').length), clock: document.getElementById('clockT').textContent, mode: tt.mode }))
   expect(r.mode === 'play' && r.pegs.join() === '1,1,1,1' && /^(3:00|2:59)$/.test(r.clock), JSON.stringify(r)); return r
 })
-await t('画面タッチ: ビルに掛かる／遠すぎると×が出て掛からない', async () => {
+await t('画面タッチ: ビルに掛かる／遠すぎる所を押すと届く範囲に掛かる（届く物が無ければ×）', async () => {
   const r = await p.evaluate(() => {
     const me = tt.me.r
     tt.dbg.freezeCpu(true)
@@ -216,9 +235,10 @@ await t('画面タッチ: ビルに掛かる／遠すぎると×が出て掛か�
     tt.log.length = 0
     tt.dbg.pressWire(far.sx, far.sy); tt.dbg.step(2)
     const miss = tt.log.find(e => e.t === 'wireMiss')
-    return { gotNear, lenNear: Math.round(lenNear), farD: far && Math.round(far.d), farRope: !!me.rope, miss: !!(miss && miss.far), missShown: !document.getElementById('miss').classList.contains('hidden') }
+    const farLen = me.rope ? Math.hypot(me.rope.x - me.x, me.rope.y - me.y, me.rope.z - me.z) : 0
+    return { gotNear, lenNear: Math.round(lenNear), farD: far && Math.round(far.d), farRope: !!me.rope, farLen: Math.round(farLen), miss: !!(miss && miss.far), missShown: !document.getElementById('miss').classList.contains('hidden') }
   })
-  expect(r.gotNear && r.lenNear <= 72 && !r.farRope && r.miss && r.missShown, JSON.stringify(r)); return r
+  expect(r.gotNear && r.lenNear <= 72 && (r.farRope ? r.farLen <= 73 : r.miss && r.missShown), JSON.stringify(r)); return r
 })
 await t('相手に飛び込むと手ぬぐいを取る（物干しの本数と文字が変わる）', async () => {
   const r = await p.evaluate(() => {
@@ -292,23 +312,32 @@ await t('WebKit: 2本指の touchmove を止める', async () => {
   const r = await wp.evaluate(() => { const e = new Event('touchmove', { cancelable: true, bubbles: true }); Object.defineProperty(e, 'touches', { value: [{}, {}] }); document.body.dispatchEvent(e); return e.defaultPrevented })
   expect(r, r)
 })
-await t('WebKit: タップで始まってスマホ操作が出る（巻取ボタンは無い）・実際には無音', async () => {
+await t('WebKit: タップで始まってスマホ操作が出る（巻取・跳ぶボタンは無い、大きいワイヤーボタンだけ）・実際には無音', async () => {
   await wp.tap('#btnStart'); await wp.waitForTimeout(1200)
   const r = await wp.evaluate(() => ({ mode: tt.mode, touch: !document.getElementById('touch').classList.contains('hidden'), btns: [...document.querySelectorAll('.tbtn')].map(b => b.dataset.k), mute: window.__muteOk(), calls: window.__soundCalls }))
-  expect(r.mode === 'play' && r.touch && r.btns.join() === 'jump' && r.mute, JSON.stringify(r)); return r
+  expect(r.mode === 'play' && r.touch && r.btns.join() === 'wire' && r.mute, JSON.stringify(r)); return r
 })
 await t('WebKit: スティックで走る', async () => {
-  const box = await wp.locator('#stick').boundingBox()
+  const box = await wp.locator('#stickZone').boundingBox()
   const x0 = await wp.evaluate(() => [tt.me.r.x, tt.me.r.z])
   await wp.evaluate(({ x, y }) => {
-    const el = document.getElementById('stick')
+    const el = document.getElementById('stickZone')
     const ev = (type, cx, cy) => el.dispatchEvent(new PointerEvent(type, { pointerId: 7, clientX: cx, clientY: cy, bubbles: true, pointerType: 'touch' }))
     ev('pointerdown', x, y); ev('pointermove', x, y - 50)
-  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 })
+  }, { x: box.x + box.width * 0.4, y: box.y + box.height * 0.7 })
   await wp.waitForTimeout(1200)
   const x1 = await wp.evaluate(() => [tt.me.r.x, tt.me.r.z])
   const d = Math.hypot(x1[0] - x0[0], x1[1] - x0[1])
+  await wp.evaluate(() => { const el = document.getElementById('stickZone'); el.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, bubbles: true, pointerType: 'touch' })) })
   expect(d > 3, d); return { moved: +d.toFixed(1) }
+})
+await t('WebKit: 右下の大きいワイヤーボタンで掛かって、もう一回で離れる', async () => {
+  await wp.evaluate(() => { tt.me.r.rope = null })
+  await wp.tap('.tbtn[data-k=wire]'); await wp.waitForTimeout(300)
+  const a = await wp.evaluate(() => !!tt.me.r.rope)
+  await wp.tap('.tbtn[data-k=wire]'); await wp.waitForTimeout(300)
+  const b = await wp.evaluate(() => !!tt.me.r.rope)
+  expect(a && !b, JSON.stringify({ hooked: a, after: b })); return true
 })
 await t('WebKit: エラーなし', async () => { expect(wp.errs.length === 0, wp.errs.join('|')) })
 await wb.close()

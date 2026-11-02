@@ -170,10 +170,10 @@ export function blocked(world, ax, ay, az, bx, by, bz) {
 // 狙う角度を何本か試して、前向き・ほどよい高さ・近すぎないものを選ぶ
 const PITCHES = [58, 48, 68, 40, 76, 32]
 const YAWS = [0, 18, -18, 36, -36, 54, -54, 70, -70, 84, -84]
-export function findAnchor(world, r) {
+export function findAnchor(world, r, dirYaw = null) {
   const v = Math.hypot(r.vx, r.vz)
-  let hx = Math.sin(r.yaw), hz = Math.cos(r.yaw)
-  if (v > 6) { const k = 0.45; hx = hx * (1 - k) + r.vx / v * k; hz = hz * (1 - k) + r.vz / v * k; const l = Math.hypot(hx, hz); hx /= l; hz /= l }
+  let hx = Math.sin(dirYaw ?? r.yaw), hz = Math.cos(dirYaw ?? r.yaw)
+  if (v > 6 && dirYaw == null) { const k = 0.45; hx = hx * (1 - k) + r.vx / v * k; hz = hz * (1 - k) + r.vz / v * k; const l = Math.hypot(hx, hz); hx /= l; hz /= l }
   const ox = r.x, oy = r.y + 1.5, oz = r.z
   const boxes = anchorBoxes(world)
   const near = boxes.filter(o => Math.abs(o.cx - ox) < RUN.wireRange + o.hw && Math.abs(o.cz - oz) < RUN.wireRange + o.hl && o.y1 > oy + RUN.wireMinUp)
@@ -321,7 +321,12 @@ export function stepRunner(r, inp, dt, world) {
     // ワイヤー中に別の所を狙ったら、外してすぐそこへ掛け直す（つなぎ）。狙いが無ければ外すだけ
     const chain = r.rope && inp.wireAt
     if (r.rope) release(r, true)
-    if (r.rope === null && (chain || !wirePressHadRope(r))) {
+    if (r.climbing && !inp.wireAt) {
+      // 壁に張り付き中にワイヤーボタン（狙いなし）: 壁を蹴って離れる。跳ぶボタンは無い（2026-11-02 本人「飛ぶボタンいらん」。空中キャッチと同じ）
+      const cl = r.climbing; r.climbing = null
+      r.vy = RUN.jump * 0.9; r.vx = cl.nx * 7; r.vz = cl.nz * 7; r.yaw = Math.atan2(cl.nx, cl.nz)
+      ev.push({ t: 'jump', wall: true })
+    } else if (r.rope === null && (chain || !wirePressHadRope(r))) {
       r.sneaking = false
       const fromGround = r.grounded
       if (r.grounded) { r.vy = Math.max(r.vy, RUN.jump * 0.85); r.grounded = false; r.y += 0.05; ev.push({ t: 'jump' }) }
@@ -331,7 +336,7 @@ export function stepRunner(r, inp, dt, world) {
       if (w) {
         const d = Math.hypot(w.x - r.x, w.y - (r.y + 1.5), w.z - r.z)
         if (d <= RUN.wireRange && w.y > r.y + 2) a = { x: w.x, y: w.y, z: w.z, len: d }
-        else { ev.push({ t: 'wireMiss', far: true, x: w.x, y: w.y, z: w.z, d }); a = false }
+        else { a = findAnchor(world, r, Math.atan2(w.x - r.x, w.z - r.z)); if (!a) { ev.push({ t: 'wireMiss', far: true, x: w.x, y: w.y, z: w.z, d }); a = false } }   // 遠すぎる所を押したら、その向きで届く所を探す（空中出前と同じ）
       }
       if (a === null) a = findAnchor(world, r)
       if (a) {

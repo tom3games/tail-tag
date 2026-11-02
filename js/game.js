@@ -27,16 +27,16 @@ const T = {
     start: 'はじめる', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '準備中',
     howTitle: '遊び方', ok: 'わかった',
     howItems: [
-      '建物や電柱を<b>タッチ</b>でワイヤー',
+      '建物や電柱を<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す',
       '相手に<b>飛び込む</b>と、手ぬぐいを1本取れる',
       '地面にいると<b>光ってばれる</b>。電柱の手ぬぐいは空中でしか取れない'
     ],
-    keysPc: 'PC: WASD・矢印で移動　クリックでワイヤー（E でも可）　Space ジャンプ・壁を蹴る　ドラッグで見回す　壁では WASD で上下左右',
+    keysPc: 'PC: WASD・矢印で移動　クリックでワイヤー（E でも可）　Space でも離れる・壁を蹴る　ドラッグで見回す　壁では WASD で上下左右',
     credit: '音: Kenney, rubberduck, artisticdude, poinl, Almitory ほか（CC0）。人物: KayKit（CC0）',
     pause: '休憩', paused: '休憩中', resume: '戻る', quit: 'やめる',
     jump: '跳ぶ', tooFar: '届かない',
-    hint1: '<small>こつ</small>ビルや電柱をタッチでワイヤー', hint1Pc: '<small>こつ</small>ビルや電柱をクリック（か E）でワイヤー',
-    hint2: '<small>こつ</small>光る矢印の相手に飛び込め', hint3: '<small>こつ</small>壁に張り付いたらスティックで上下左右',
+    hint1: '<small>こつ</small>大きいボタンかビルをタッチでワイヤー', hint1Pc: '<small>こつ</small>ビルや電柱をクリック（か E）でワイヤー',
+    hint2: '<small>こつ</small>光る矢印の相手に飛び込め', hint3: '<small>こつ</small>壁ではスティックで這う。大きいボタンで離れる',
     glowMe: '地面にいると光る！', got: n => `${n}から取った`, lost: n => `${n}に取られた`, pick: '電柱の手ぬぐいを取った', freeNew: '電柱に手ぬぐいが下がった',
     cpuGot: (a, b) => `${a}が${b}から取った`, last30: 'あと30秒', last10: 'あと10秒', end: 'そこまで',
     ranks: ['優勝', '2位', '3位', '4位'], again: 'もう一回', save: '画像を保存', post: 'Xでポスト', toTitle: 'タイトル',
@@ -49,16 +49,16 @@ const T = {
     start: 'Play', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Loading',
     howTitle: 'How to play', ok: 'Got it',
     howItems: [
-      '<b>Tap</b> a building or pole to shoot a wire and swing',
+      '<b>Tap</b> a building or pole, or the big button, to swing. Press again to let go',
       '<b>Fly into</b> a rival to grab one of their towels',
       'Stay on the street and <b>your towel glows</b>. Towels hanging on poles can only be grabbed in the air'
     ],
-    keysPc: 'PC: WASD / arrows move · click to wire (or E) · Space jump / kick off a wall · drag to look · WASD on walls',
+    keysPc: 'PC: WASD / arrows move · click to wire (or E) · Space also lets go / kicks off a wall · drag to look · WASD on walls',
     credit: 'Sounds: Kenney, rubberduck, artisticdude, poinl, Almitory and others (CC0). Characters: KayKit (CC0)',
     pause: 'Pause', paused: 'Paused', resume: 'Resume', quit: 'Quit',
     jump: 'Jump', tooFar: 'Too far',
-    hint1: '<small>Tip</small>Tap a building or pole to wire', hint1Pc: '<small>Tip</small>Click a building or pole (or E) to wire',
-    hint2: '<small>Tip</small>Fly into the rival the arrow points at', hint3: '<small>Tip</small>On a wall, the stick moves you any way',
+    hint1: '<small>Tip</small>Tap the big button or a building to wire', hint1Pc: '<small>Tip</small>Click a building or pole (or E) to wire',
+    hint2: '<small>Tip</small>Fly into the rival the arrow points at', hint3: '<small>Tip</small>Crawl with the stick. The big button lets go',
     glowMe: 'On the street, you glow!', got: n => `Grabbed from ${n}`, lost: n => `${n} took one`, pick: 'Grabbed a towel off a pole', freeNew: 'A towel is hanging on a pole',
     cpuGot: (a, b) => `${a} took one from ${b}`, last30: '30 seconds left', last10: '10 seconds left', end: 'Time!',
     ranks: ['1st', '2nd', '3rd', '4th'], again: 'Again', save: 'Save image', post: 'Post on X', toTitle: 'Title',
@@ -275,18 +275,26 @@ function aimAt(cx, cy) {
 }
 const stick = { x: 0, y: 0, id: null }
 {
-  const el = $('stick'), knob = el.querySelector('.knob')
+  // 左の広い範囲のどこを触ってもスティックが出る（空中出前・空中キャッチと同じ）
+  const zone = $('stickZone'), el = $('stick'), knob = el.querySelector('.knob')
+  let ox = 0, oy = 0
+  const R = () => el.getBoundingClientRect().width / 2
   const upd = e => {
-    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2
-    let dx = (e.clientX - cx) / (r.width / 2), dy = (e.clientY - cy) / (r.height / 2)
+    let dx = (e.clientX - ox) / R(), dy = (e.clientY - oy) / R()
     const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l }
     stick.x = dx; stick.y = dy; knob.style.transform = `translate(${dx * 36}px,${dy * 36}px)`
   }
-  el.addEventListener('pointerdown', e => { Snd.init(); stick.id = e.pointerId; try { el.setPointerCapture(e.pointerId) } catch (er) {} upd(e) })
-  el.addEventListener('pointermove', e => { if (e.pointerId === stick.id) upd(e) })
-  const end = e => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; knob.style.transform = '' }
-  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end)
-  for (const b of document.querySelectorAll('.tbtn')) b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); press[b.dataset.k] = true })
+  zone.addEventListener('pointerdown', e => {
+    Snd.init(); if (stick.id != null) return
+    stick.id = e.pointerId; try { zone.setPointerCapture(e.pointerId) } catch (er) {}
+    const zr = zone.getBoundingClientRect(); ox = e.clientX; oy = e.clientY
+    el.style.left = (ox - zr.left) + 'px'; el.style.top = (oy - zr.top) + 'px'; el.classList.add('held'); upd(e)
+  })
+  zone.addEventListener('pointermove', e => { if (e.pointerId === stick.id) upd(e) })
+  const end = e => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; knob.style.transform = ''; el.classList.remove('held'); el.style.left = el.style.top = '' }
+  zone.addEventListener('pointerup', end); zone.addEventListener('pointercancel', end)
+  // 大きいボタン: 前の上へ自動でワイヤー（相手は追わない）。ワイヤー中なら離す、壁に張り付き中なら壁から離れる。跳ぶボタンは無い（2026-11-02 本人）
+  for (const b of document.querySelectorAll('.tbtn')) b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); if (b.dataset.k === 'wire') pendingWire = { at: null, key: true } })
 }
 function gather(r) {
   let thr = 0, brk = 0, steer = 0, cx = 0, cy = 0
@@ -296,10 +304,11 @@ function gather(r) {
   if (keys.has('KeyD') || keys.has('ArrowRight')) { steer += 1; cx += 1 }
   if (stick.id != null) {
     const mag = Math.min(1, Math.hypot(stick.x, stick.y))
-    if (mag > 0.2) {
+    if (mag > 0.15) {
+      // 空中出前と同じ効き方: 倒した向き（カメラから見て）へ走る。少し倒すだけで全力
       const want = cam.hd + Math.atan2(-stick.x, -stick.y)
       let d = want - r.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2
-      steer = Math.max(-1, Math.min(1, -d * 2.4)); thr = Math.abs(d) > 2.4 ? 0.3 : mag
+      steer = Math.max(-1, Math.min(1, -d * 2.5)); thr = Math.max(thr, Math.min(1, mag * 1.3))
       cy = -stick.y; cx = stick.x
     }
   }
@@ -502,7 +511,7 @@ function updateCamera(dt, c, md) {
   const v = Math.hypot(c.vx, c.vz)
   let hx = Math.sin(c.yaw), hz = Math.cos(c.yaw)
   if (v > 8 && !c.climbing) { const k = c.grounded ? 0.25 : 0.45; hx = hx * (1 - k) + (c.vx / v) * k; hz = hz * (1 - k) + (c.vz / v) * k; const l = Math.hypot(hx, hz); hx /= l; hz /= l }
-  const manual = performance.now() - cam.userT < 1800
+  const manual = touchMode || performance.now() - cam.userT < 1800   // スマホはカメラが勝手に追いかけない（空中出前と同じ）
   if (!manual) { cam.hd = lerpAngle(cam.hd, Math.atan2(hx, hz), 1 - Math.exp(-dt * (touchMode ? 2.2 : 5))); cam.pitch += ((c.climbing ? 0.35 : 0.15) - cam.pitch) * (1 - Math.exp(-dt * 1.5)) }
   hx = Math.sin(cam.hd); hz = Math.cos(cam.hd)
   let back = 5.2 + Math.min(2.4, v * 0.07), up = 2.1
@@ -644,7 +653,7 @@ window.tt = {
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
     teleport: (x, y, z, yaw) => { const r = me().r; Object.assign(r, { x, y, z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, grounded: y < 0.1 }); if (yaw != null) r.yaw = yaw },
-    pressWire: (sx, sy) => aimAt(sx, sy), pressJump: () => { press.jump = true },
+    pressWire: (sx, sy) => aimAt(sx, sy), pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
     keys, stick, say, setTime: f => { m.t = f * TAG.sec }, get models() { return models }, freezeCpu: on => { for (let i = 1; i < 4; i++) bots[i] = on ? createBot('idle') : createBot('cpu', CPU_SKILL[i - 1], i) }
   }
 }
