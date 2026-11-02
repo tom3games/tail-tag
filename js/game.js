@@ -1,18 +1,20 @@
 // 空中しっぽ取り。WIRE ESCAPE のワイヤーと街で、CPU 3人と腰の手ぬぐい（しっぽ）を取り合う
 // 地面に居続けるとしっぽが光ってばれる。3分で昼から夜になる。終わった時の本数で順位
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=8'
-import { createWorld } from '../shared/track.js?v=8'
-import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=8'
-import { buildScene } from './scene.js?v=8'
-import { FX } from './fx.js?v=8'
-import { loadSky, setAniso } from './look.js?v=8'
-import { Q } from './quality.js?v=8'
-import { RunnerModel } from './runnermodel.js?v=8'
-import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=8'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=8'
-import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=8'
-import { createBot, botInput } from '../shared/tagbot.js?v=8'
+import { GAME } from '../shared/config.js?v=9'
+import { createWorld } from '../shared/track.js?v=9'
+import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=9'
+import { buildScene } from './scene.js?v=9'
+import { FX } from './fx.js?v=9'
+import { loadSky, setAniso } from './look.js?v=9'
+import { Q, LOW } from './quality.js?v=9'
+import { trafficMeshes } from './carmodel.js?v=9'
+import { createTraffic, CARS } from '../shared/traffic.js?v=9'
+import { RunnerModel } from './runnermodel.js?v=9'
+import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=9'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=9'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=9'
+import { createBot, botInput } from '../shared/tagbot.js?v=9'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -30,9 +32,10 @@ const T = {
     start: 'はじめる', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '手ぬぐいを干しています',
     howTitle: '遊び方', ok: 'わかった',
     howItems: [
-      '建物や電柱を<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す',
+      '建物や電柱を<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す。空中で<b>地面をタップ</b>すると地面に掛かって加速',
       '相手に<b>飛び込む</b>と、手ぬぐいを1本取れる',
-      '地面にいると<b>光ってばれる</b>。電柱の手ぬぐいは空中でしか取れない'
+      '地面にいると<b>光ってばれる</b>。電柱の手ぬぐいは空中でしか取れない',
+      '通りは<b>車</b>が走る。はねられると2秒くらくら（空中なら当たらない）'
     ],
     keysPc: 'PC: WASD・矢印で移動　クリックでワイヤー（E でも可）　Space でも離れる・壁を蹴る　ドラッグで見回す　壁では WASD で上下左右',
     credit: '音: Kenney, rubberduck, artisticdude, poinl, Almitory ほか（CC0）。人物: KayKit（CC0）',
@@ -40,6 +43,7 @@ const T = {
     jump: '跳ぶ', tooFar: '届かない',
     hint1: '<small>こつ</small>大きいボタンかビルをタッチでワイヤー', hint1Pc: '<small>こつ</small>ビルや電柱をクリック（か E）でワイヤー',
     hint2: '<small>こつ</small>光る矢印の相手に飛び込め', hint3: '<small>こつ</small>壁ではスティックで這う。大きいボタンで離れる',
+    carMe: '車にはねられた！くらくら…', carCpu: n => `${n}が車にはねられた`,
     glowMe: '地面にいると光る！', got: n => `${n}から取った`, lost: n => `${n}に取られた`, pick: '電柱の手ぬぐいを取った', freeNew: '電柱に手ぬぐいが下がった',
     cpuGot: (a, b) => `${a}が${b}から取った`, last30: 'あと30秒', last10: 'あと10秒', end: 'そこまで',
     ranks: ['優勝', '2位', '3位', '4位'], again: 'もう一回', save: '画像を保存', post: 'Xでポスト', toTitle: 'タイトル',
@@ -56,9 +60,10 @@ const T = {
     start: 'Play', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Hanging the towels',
     howTitle: 'How to play', ok: 'Got it',
     howItems: [
-      '<b>Tap</b> a building or pole, or the big button, to swing. Press again to let go',
+      '<b>Tap</b> a building or pole, or the big button, to swing. Press again to let go. In the air, <b>tap the ground</b> to zip toward it',
       '<b>Fly into</b> a rival to grab one of their towels',
-      'Stay on the street and <b>your towel glows</b>. Towels hanging on poles can only be grabbed in the air'
+      'Stay on the street and <b>your towel glows</b>. Towels hanging on poles can only be grabbed in the air',
+      '<b>Cars</b> drive the streets. Get hit and you are dizzy for 2 seconds (they cannot reach you in the air)'
     ],
     keysPc: 'PC: WASD / arrows move · click to wire (or E) · Space also lets go / kicks off a wall · drag to look · WASD on walls',
     credit: 'Sounds: Kenney, rubberduck, artisticdude, poinl, Almitory and others (CC0). Characters: KayKit (CC0)',
@@ -66,6 +71,7 @@ const T = {
     jump: 'Jump', tooFar: 'Too far',
     hint1: '<small>Tip</small>Tap the big button or a building to wire', hint1Pc: '<small>Tip</small>Click a building or pole (or E) to wire',
     hint2: '<small>Tip</small>Fly into the rival the arrow points at', hint3: '<small>Tip</small>Crawl with the stick. The big button lets go',
+    carMe: 'Hit by a car! Seeing stars...', carCpu: n => `${n} got hit by a car`,
     glowMe: 'On the street, you glow!', got: n => `Grabbed from ${n}`, lost: n => `${n} took one`, pick: 'Grabbed a towel off a pole', freeNew: 'A towel is hanging on a pole',
     cpuGot: (a, b) => `${a} took one from ${b}`, last30: '30 seconds left', last10: '10 seconds left', end: 'Time!',
     ranks: ['1st', '2nd', '3rd', '4th'], again: 'Again', save: 'Save image', post: 'Post on X', toTitle: 'Title',
@@ -98,6 +104,7 @@ Snd.def({
   grab: ['snd/cloth1.mp3', 'snd/cloth2.mp3', 'snd/cloth4.mp3'], lost: ['snd/grunt_01.mp3', 'snd/grunt_02.mp3', 'snd/grunt_03.mp3', 'snd/grunt_04.mp3'],
   pick: 'snd/coin_drop.mp3', ding: 'snd/bell_ding1.mp3', glow: 'snd/error_004.mp3', free: 'snd/confirmation_002.mp3',
   click: 'snd/click_001.mp3', tick: 'snd/tick_002.mp3', whoosh: 'snd/swish-5.mp3', clap: 'snd/applause.mp3',
+  car: ['snd/car_hit1.mp3', 'snd/car_hit2.mp3'], dizzy: 'snd/dizzy.mp3',
   win: 'snd/jingles_SAX01.mp3', mid: 'snd/jingles_SAX10.mp3', meh: 'snd/jingles_SAX03.mp3', lose: 'snd/jingles_PIZZA07.mp3'
 })
 const sfx = (n, o) => Snd.play(n, o)
@@ -218,6 +225,12 @@ const ropes = COLORS.map(() => { const m = new THREE.Mesh(new THREE.CylinderGeom
 // 狙い（PC の E で掛かる所）
 const aimMark = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.75, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false }))
 aimMark.renderOrder = 5; aimMark.visible = false; scene.add(aimMark)
+// 通りの車（全台を InstancedMesh で。並びは試合ごとに同じなので、最初に作った並びで描く）
+const carsDraw = trafficMeshes(scene, createTraffic(world).cars, LOW)
+// 気絶の星（頭の上を回る黄色い星5つ）
+const starGeo = (() => { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 0.08 : 0.19; i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r) } return new THREE.ShapeGeometry(sh) })()
+const starMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, side: THREE.DoubleSide })
+const stars = COLORS.map(() => { const g = new THREE.Group(); for (let k = 0; k < 5; k++) g.add(new THREE.Mesh(starGeo, starMat)); g.visible = false; scene.add(g); return g })
 
 // ---------------------------------------------------------------- 状態
 let mode = 'title'        // title | play | result
@@ -260,6 +273,8 @@ addEventListener('keydown', e => {
 })
 addEventListener('keyup', e => keys.delete(e.code))
 const gest = new Map()
+// スワイプで見回す感度（2026-11-03 本人「ほんとにちょっとだけ高く」で約1.2倍: 0.006→0.0072 / 0.004→0.0048。ワイヤー系全部）
+const LOOK = { yaw: 0.0072, pitch: 0.0048 }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2()
 renderer.domElement.addEventListener('pointerdown', e => {
   Snd.init()
@@ -271,7 +286,7 @@ addEventListener('pointermove', e => {
   const dx = e.clientX - g.lx, dy = e.clientY - g.ly; g.lx = e.clientX; g.ly = e.clientY
   if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) > 12) g.moved = true
   if (!g.moved) return
-  cam.hd -= dx * 0.006; cam.pitch = Math.max(-0.35, Math.min(1, cam.pitch + dy * 0.004)); cam.userT = performance.now()
+  cam.hd -= dx * LOOK.yaw; cam.pitch = Math.max(-0.35, Math.min(1, cam.pitch + dy * LOOK.pitch)); cam.userT = performance.now()
 })
 addEventListener('pointerup', e => {
   const g = gest.get(e.pointerId); if (!g) return
@@ -279,13 +294,25 @@ addEventListener('pointerup', e => {
   if (!g.moved && performance.now() - g.t < 450 && mode === 'play' && !paused) aimAt(e.clientX, e.clientY)
 })
 addEventListener('pointercancel', e => gest.delete(e.pointerId))
+// タップした所: 建物・電柱に当たればそこ（建物を優先）。当たった所が床（道・屋上）で自分より下なら地面ワイヤー、
+// 何にも当たらなければ道の面（高さ0）を見る。地面ワイヤーになるのは画面の地面をタップした時だけ（ボタン・自動の狙いでは絶対に掛けない）
+function tapTarget(o, d) {
+  const h = rayHit(world, o.x, o.y, o.z, d.x, d.y, d.z, 400)
+  const r = me() && me().r
+  if (h) {
+    if (!h.pole && r && h.y < r.y - 0.5 && Math.abs(floorAt(world, h.x, h.z, h.y + 0.2).h - h.y) < 0.15) return { ...h, ground: true }
+    return h
+  }
+  if (d.y < -0.02) { const t = -o.y / d.y; if (t > 0 && t < 400) return { x: o.x + d.x * t, y: 0, z: o.z + d.z * t, ground: true } }
+  return null
+}
 function aimAt(cx, cy) {
   const rc = renderer.domElement.getBoundingClientRect()
   ndc.set((cx - rc.left) / rc.width * 2 - 1, -((cy - rc.top) / rc.height) * 2 + 1)
   ray.setFromCamera(ndc, camera)
   const o = ray.ray.origin, d = ray.ray.direction
   // ワイヤー中でも狙った所があれば掛け直す（つなぎ）。何も無い所なら外すだけ
-  pendingWire = { at: rayHit(world, o.x, o.y, o.z, d.x, d.y, d.z, 400), sx: cx, sy: cy }
+  pendingWire = { at: tapTarget(o, d), sx: cx, sy: cy }
 }
 const stick = { x: 0, y: 0, id: null }
 {
@@ -438,6 +465,7 @@ function onRunnerEvent(e) {
     if (e.far && tp && tp.sx != null) { const el = $('miss'); el.style.left = tp.sx + 'px'; el.style.top = tp.sy + 'px'; el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; clearTimeout(el._t); el._t = setTimeout(() => el.classList.add('hidden'), 800) }
   } else if (e.t === 'land') { sfx('land', { vol: Math.min(1, 0.3 + e.impact / 20) }); if (e.impact > 14) { sfx('bonk', { vol: 0.5 }); fx.addShake(Math.min(0.6, e.impact / 40)) } }
   else if (e.t === 'bonk') { sfx('bonk', { vol: 0.8 }); fx.addShake(0.4) }
+  else if (e.t === 'unwire' && e.ground) { sfx('whoosh', { vol: 0.7, rate: 1.05 }); fovKick = 7 }   // 地面ワイヤーが外れて跳ねる
   else if (e.t === 'unwire' && !e.auto) { const r = me().r, v = Math.hypot(r.vx, r.vy, r.vz); if (v > 16) { sfx('whoosh', { vol: Math.min(0.8, v / 50), rate: 0.9 + Math.random() * 0.2 }); fovKick = Math.min(6, (v - 16) * 0.3) } }   // 速く離すと風を切る
 }
 function onMatchEvent(e) {
@@ -452,6 +480,10 @@ function onMatchEvent(e) {
   } else if (e.t === 'pick') {
     if (e.by === 0) { sfx('pick', { vol: 0.8 }); sfx('grab'); say(t('pick'), 1.6, 'good'); bump(0) } else bump(e.by)
     fx.debrisAt(e.x, e.y, e.z, 12, 0xf2efe6, { speed: 3, up: 3, size: 0.12 })
+  } else if (e.t === 'car') {
+    if (e.who === 0) { sfx('car', { vol: 1 }); sfx('lost', { vol: 0.7, delay: 0.08 }); sfx('dizzy', { vol: 0.55, delay: 0.25, rate: 1.36 }); say(t('carMe'), 2, 'bad'); fx.addShake(0.8); fovKick = 6; hitStop = 0.07 }
+    else { sfx('car', { vol: 0.8 * near(e.x, e.z) }); if (sayT <= 0 && near(e.x, e.z) > 0.5) say(t('carCpu')(pname(e.who)), 1.2, 'small') }
+    fx.debrisAt(e.x, e.y, e.z, 8, 0xffd23a, { speed: 4, up: 4, size: 0.1 })
   } else if (e.t === 'freeNew') { sfx('free', { vol: 0.45 }) }
   else if (e.t === 'glow' && e.who === 0) { sfx('glow', { vol: 0.6 }) }
   else if (e.t === 'end') { sfx('whoosh'); say(e.down ? t('fleeDown') : t('end'), 1.8, 'big'); endAt = 1.8 }
@@ -621,6 +653,7 @@ function setTime(f) {
   renderer.toneMappingExposure = L(a.exp, b.exp)
   const w = L(a.win, b.win); for (const g of glowMats) g.m.emissiveIntensity = g.base * w
   lampPts.material.opacity = L(a.lamp, b.lamp)
+  carsDraw.lights(L(a.lamp, b.lamp))
   window.__timeF = f
 }
 
@@ -688,6 +721,9 @@ function render(dt) {
     const rp = ropes[i]
     if (p.r.rope) { const h = md.handWorld && md.handWorld.lengthSq() ? md.handWorld : _v.set(p.r.x, p.r.y + 1.4, p.r.z); rp.visible = true; rp.position.copy(h); rp.lookAt(p.r.rope.x, p.r.rope.y, p.r.rope.z); rp.scale.set(1, 1, Math.max(0.1, h.distanceTo(_w.set(p.r.rope.x, p.r.rope.y, p.r.rope.z)))) }
     else rp.visible = false
+    // 気絶: 頭の上を星が回る
+    const sg = stars[i]; sg.visible = p.r.stun > 0
+    if (sg.visible) { const k = performance.now() / 1000; sg.position.set(p.r.x, p.r.y + 1.95, p.r.z); sg.children.forEach((st, j) => { const a = k * 5 + j / 5 * Math.PI * 2; st.position.set(Math.cos(a) * 0.55, Math.sin(k * 7 + j) * 0.06, Math.sin(a) * 0.55); st.lookAt(camera.position) }) }
     // 取られた直後は点滅
     md.group.visible = !(p.immune > 0 && Math.floor(performance.now() / 90) % 2 === 0 && p.immune < TAG.immune - 0.2)
   })
@@ -696,6 +732,7 @@ function render(dt) {
     updateCamera(dt, focus.r, fm)
     const d = sun.userData.dir, c = focus.r; sun.position.set(c.x + d.x * 150, c.y + d.y * 150, c.z + d.z * 150); sun.target.position.set(c.x, c.y, c.z)
   }
+  if (m.traffic) carsDraw.draw(m.traffic.cars, camera.position)
   // 落ちている手ぬぐい
   const k = performance.now() / 1000
   freeMeshes.forEach(g => g.visible = false)
@@ -731,12 +768,12 @@ function render(dt) {
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.tt = {
-  get mode() { return mode }, log, get m() { return m }, get me() { return me() }, TAG, RUN, world, camera, touchMode, COLORS, rayHit, cam, get level() { return level }, setLevel: l => { level = l; applyLevel() }, get gmode() { return gmode }, setMode: md => { gmode = md; applyLevel() }, lockTarget: () => m && lockTarget(m, me()),
+  get mode() { return mode }, log, LOOK, CARS, renderer, carsDraw, get m() { return m }, get me() { return me() }, TAG, RUN, world, camera, touchMode, COLORS, rayHit, cam, get level() { return level }, setLevel: l => { level = l; applyLevel() }, get gmode() { return gmode }, setMode: md => { gmode = md; applyLevel() }, lockTarget: () => m && lockTarget(m, me()),
   start: seed => startMatch(seed), toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
     teleport: (x, y, z, yaw) => { const r = me().r; Object.assign(r, { x, y, z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, grounded: y < 0.1 }); if (yaw != null) r.yaw = yaw },
-    pressWire: (sx, sy) => aimAt(sx, sy), pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
+    pressWire: (sx, sy) => aimAt(sx, sy), tapTarget: (sx, sy) => { const rc = renderer.domElement.getBoundingClientRect(); ndc.set((sx - rc.left) / rc.width * 2 - 1, -((sy - rc.top) / rc.height) * 2 + 1); ray.setFromCamera(ndc, camera); return tapTarget(ray.ray.origin, ray.ray.direction) }, pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
     keys, stick, say, setTime: f => { m.t = f * TAG.sec }, get models() { return models }, freezeCpu: on => { for (let i = 1; i < 4; i++) bots[i] = on ? createBot('idle') : createBot('cpu', TAG.levels[m.level].cpu[i - 1], i) }
   }
 }

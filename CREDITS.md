@@ -22,3 +22,6 @@
 - WIRE ESCAPE / BREAK THE ROUTE と同じ（Poly Haven CC0 のテクスチャと HDRI、自作の建物）
 - snd/wind_loop.wav: Howling wind / Tvabutzku1234 / CC0（Wikimedia Commons。14秒の継ぎ目なしループ。空中で速い時の風）
 - snd/city_street_loop.wav: Sunday in the city street noise 1 / cori / Public domain（Wikimedia Commons。静かな通りの22.5秒ループ。街の環境音）
+- snd/dizzy.mp3: Wacky Wobblings / Fupi / CC0
+- snd/car_hit1.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/car_hit2.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0

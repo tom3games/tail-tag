@@ -1,7 +1,7 @@
 // CPU のしっぽ取り（WIRE ESCAPE の runnerbot と同じ考え方: 行きたい向きの前の建物・電柱にワイヤーを掛けてつなぐ）
 // 性格: cpu（skill 0〜1 で強さ）／検証用: skilled（上手い人）・sloppy（下手な人: 反応が遅く狙いが雑）・ground（地面だけ走る手抜き）・idle（何もしない）
-import { findAnchor, RUN } from './runner.js?v=8'
-import { TAG, lockTarget } from './tag.js?v=8'
+import { findAnchor, RUN } from './runner.js?v=9'
+import { TAG, lockTarget } from './tag.js?v=9'
 
 const ang = a => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a }
 
@@ -79,6 +79,16 @@ export function botInput(b, p, m, world, dt) {
     inp.climbX = Math.max(-1, Math.min(1, ((gx - r.x) * tx + (gz - r.z) * tz) / 6))
     const away = (gx - r.x) * cl.nx + (gz - r.z) * cl.nz > 4
     if (b.kind !== 'ground' && (away || (inp.climbY === 0 && dh > 10))) { inp.jump = !b.prevJ; b.prevJ = inp.jump; return inp }
+  }
+  // 車: 地面で前から来る車に気づいたら跳んでよける。気づくかは強さしだい（弱い CPU はたまにはねられる）
+  if (m.traffic && r.grounded && (b.kind === 'cpu' || b.kind === 'skilled' || b.kind === 'flee')) {
+    b.carT = (b.carT || 0) - dt
+    if (b.carT <= 0) {
+      b.carT = 0.15
+      const th = m.traffic.threat(r, 0.9)
+      if (th && th.car.id !== b.seenCar) { b.seenCar = th.car.id; b.dodge = b.rnd() < 0.45 + 0.5 * b.skill }
+    }
+    if (b.dodge) { b.dodge = false; inp.jump = true; b.prevJ = true; return inp }
   }
   // 地面にいる相手のそばでは、ワイヤーで飛び越さずに降りて走って詰める（地面で待てば安全、にしない）
   const tgR = b.tgt && b.tgt.kind === 'p' ? b.tgt.o.r : null

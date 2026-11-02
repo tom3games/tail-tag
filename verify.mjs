@@ -7,6 +7,8 @@ import { createWorld } from './shared/track.js'
 import { setupArena } from './shared/arena.js'
 import { createRunner, stepRunner, rayHit, findAnchor, RUN } from './shared/runner.js'
 import { createMatch, stepMatch, TAG } from './shared/tag.js'
+import { createTraffic, CARS } from './shared/traffic.js'
+import { AREA } from './shared/arena.js'
 const ROOT = import.meta.dirname
 mkdirSync(ROOT + '/shots', { recursive: true })
 const PORT = 5392
@@ -202,6 +204,85 @@ await t('逃げるだけ（8回ずつ・ふつう）: 逃げる bot は何もし
   const r = { flee: get('normal', 'flee'), sloppy: get('normal', 'fleeSloppy'), ground: get('normal', 'ground'), idle: get('normal', 'idle') }
   expect(r.flee > r.ground * 2 && r.sloppy > r.ground * 2 && r.idle < 60 && r.ground < 60, JSON.stringify(r)); return r
 })
+// ---------------------------------------------------------------- 車（2026-11-03 本人「車を結構走らせて。ぶつかったら2秒気絶」）
+await t('車: 遊ぶ範囲の通りに150台以上・建物や電柱と重ならない・同じ車線で重ならない', () => {
+  const T = createTraffic(world); T.update(37)
+  const inside = T.cars.filter(c => c.x > AREA.x0 && c.x < AREA.x1 && c.z > AREA.z0 && c.z < AREA.z1).length
+  let bad = 0
+  for (const c of T.cars) { if (c.x < AREA.x0 || c.x > AREA.x1 || c.z < AREA.z0 || c.z > AREA.z1) continue; for (const o of world.nearby(c.x, c.z)) { if (o.slab || o.y1 == null || o.def) continue; if (Math.abs(c.x - o.cx) < o.hw + 0.9 && Math.abs(c.z - o.cz) < o.hl + 0.9) bad++ } }
+  for (const q of world.poles) for (const c of T.cars) if (Math.hypot(c.x - q.cx, c.z - q.cz) < 1.5) bad++
+  let close = 0; for (const ln of T.lines) { const cs = T.cars.filter(c => c.line === ln); for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) if (Math.hypot(cs[i].x - cs[j].x, cs[i].z - cs[j].z) < 6) close++ }
+  expect(inside >= 150 && bad === 0 && close === 0, JSON.stringify({ inside, bad, close })); return { all: T.cars.length, inside }
+})
+const carCase = () => {
+  const rs = [0, 1, 2, 3].map(i => createRunner({ id: 'p' + i, spawn: { x: CX + i * 40, y: 30, z: 700 } }))
+  for (const r of rs) { r.grounded = false; r.onRoof = true }
+  const m = createMatch(world, rs, 1); m.t = 10; m.traffic.update(m.t)
+  const c = m.traffic.cars.find(c => c.line.dx === 0 && c.z > AREA.z0 + 40 && c.z < AREA.z1 - 40 && c.x > AREA.x0 + 20 && c.x < AREA.x1 - 20)
+  return { m, rs, c }
+}
+await t('車: 地面で当たるとはね飛ばされて2秒気絶（その間は走れない・ワイヤーも掛からない）。2秒で戻る', () => {
+  const { m, rs, c } = carCase(), r = rs[0]
+  Object.assign(r, { x: c.x, y: 0, z: c.z + Math.sign(c.vz) * 1.5, vx: 0, vy: 0, vz: 0, grounded: true, onRoof: false })
+  stepMatch(m, 1 / 60)
+  const ev = m.events.find(e => e.t === 'car' && e.who === 0); m.events.length = 0
+  const st0 = r.stun, vy0 = r.vy, hv = Math.hypot(r.vx, r.vz)
+  let t = 0, wired = false
+  let k = 0
+  while (r.stun > 0 && t < 5) { const before = r.stun; r.events.length = 0; stepRunner(r, { throttle: 1, wire: (k++ % 2) === 0, wireYaw: 0, moveDir: { x: 1, z: 0 } }, 1 / 60, world); if (r.rope && before > 1 / 60) wired = true; t += 1 / 60 }   // 押したり離したりしても、気絶の間は掛からない
+  expect(ev && st0 === CARS.stun && vy0 > 5 && hv > 4 && !wired && Math.abs(t - 2) < 0.05, JSON.stringify({ ev: !!ev, st0, vy0, hv, wired, t }))
+  return { stun: st0, flyUp: +vy0.toFixed(1), flySide: +hv.toFixed(1), stunSec: +t.toFixed(2) }
+})
+await t('車: 空中（足が屋根より上）・ワイヤー中・壁では当たらない', () => {
+  const { m, rs, c } = carCase(), r = rs[0]
+  const res = {}
+  for (const [k, set] of [['air', { y: 2.2, grounded: false }], ['rope', { y: 0.5, grounded: false, rope: { x: c.x, y: 20, z: c.z, len: 19, t: 0 } }], ['wall', { y: 0.5, grounded: false, climbing: { nx: 1, nz: 0, top: 30 } }]]) {
+    Object.assign(r, { x: c.x, z: c.z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, stun: 0, carCd: 0 }, set)
+    res[k] = !!m.traffic.hitTest(r)
+  }
+  Object.assign(r, { x: c.x, z: c.z, y: 0.2, grounded: true, rope: null, climbing: null }); res.ground = !!m.traffic.hitTest(r)
+  expect(!res.air && !res.rope && !res.wall && res.ground, JSON.stringify(res)); return res
+})
+await t('車: 気絶中の人は取れない（飛び込まれると取られる）', () => {
+  const rs = [0, 1, 2, 3].map(i => createRunner({ id: 'p' + i, spawn: { x: CX + i * 60, y: 8, z: 700 } }))
+  for (const r of rs) r.grounded = false
+  const m = createMatch(world, rs, 1); m.t = 10; m.traffic = null
+  rs[1].x = CX; rs[1].z = 702; rs[1].vz = -12; rs[1].stun = 1.5
+  stepMatch(m, 1 / 60); const a = m.events.find(e => e.t === 'steal'); m.events.length = 0
+  rs[1].stun = 0; rs[0].stun = 1.5; rs[1].z = 702; rs[1].vz = -12; rs[0].z = 700
+  stepMatch(m, 1 / 60); const b = m.events.find(e => e.t === 'steal')
+  expect(!a && b && b.by === 1, JSON.stringify({ a, b })); return true
+})
+await t('bot と車: 地面だけ走る人は何度もはねられ、空中で動く人と CPU はほとんど当たらない', () => {
+  const out = execFileSync(process.execPath, ['tools/sim.mjs', '8'], { cwd: ROOT, encoding: 'utf8', timeout: 600000 })
+  const get = k => { const l = out.split('\n').find(s => s.startsWith(k)); return { me: +l.match(/車 ([\d.]+)回/)[1], cpu: +l.match(/CPU車 ([\d.]+)回/)[1] } }
+  const r = { skilled: get('skilled'), ground: get('ground'), human: get('human') }
+  expect(r.ground.me >= 2 && r.skilled.me <= 0.5 && r.ground.me > r.human.me * 3 && r.skilled.cpu < 1 && r.ground.cpu < 1, JSON.stringify(r)); return r
+})
+// ---------------------------------------------------------------- 地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地面にもワイヤーつけて加速」「地面をちゃんとタップしなあかん感じに」）
+await t('地面ワイヤー: 地面にいる時は地面に掛からない。空中では掛かって加速し、近くで外れて上へ跳ねる（瞬間移動しない）', () => {
+  const g = createRunner({ id: 'g', spawn: { x: 0, y: 0, z: 760, yaw: 0 } })
+  step(g, { wire: true, wireAt: { x: 0, y: 0, z: 790, ground: true } })
+  const onGround = !!(g.rope && g.rope.ground)
+  const r = createRunner({ id: 'a', spawn: { x: 0, y: 14, z: 760, yaw: 0 } }); r.grounded = false; r.vz = 10
+  step(r, { wire: true, wireAt: { x: 0, y: 0, z: 800, ground: true } })
+  const hooked = !!(r.rope && r.rope.ground)
+  let rel = null, maxStep = 0, maxV = 0, t = 0
+  for (let i = 0; i < 240 && !rel; i++) { const px = r.x, py = r.y, pz = r.z; step(r, {}); t += 1 / 60; maxStep = Math.max(maxStep, Math.hypot(r.x - px, r.y - py, r.z - pz)); maxV = Math.max(maxV, Math.hypot(r.vx, r.vy, r.vz)); if (!r.rope) rel = { t: +t.toFixed(2), hv: +Math.hypot(r.vx, r.vz).toFixed(1), vy: +r.vy.toFixed(1), y: +r.y.toFixed(1), ev: r.events.some(e => e.t === 'unwire' && e.ground) } }
+  expect(!onGround && hooked && rel && rel.ev && rel.hv > 20 && rel.vy > 4 && maxStep < 0.75 && maxV < RUN.maxSpeed + 5, JSON.stringify({ onGround, hooked, rel, maxStep, maxV }))
+  return { onGround, hooked, release: rel, maxStep: +maxStep.toFixed(2) }
+})
+await t('地面ワイヤー: ワイヤーボタン（自動の狙い）では空中でも地面に掛からない・壁に張り付き中も掛からない', () => {
+  let groundRopes = 0, tries = 0
+  for (const [x, z] of [[0, 760], [-130, 700], [130, 900], [-260, 620], [260, 820]]) for (const yaw of [0, 1.6, 3.1, -1.6]) for (const y of [3, 12, 25]) {
+    const r = createRunner({ id: 'a', spawn: { x, y, z, yaw } }); r.grounded = false; r.vy = -2
+    step(r, { wire: true, wireYaw: yaw }); tries++
+    if (r.rope && r.rope.ground) groundRopes++
+  }
+  const c = createRunner({ id: 'c', spawn: { x: 0, y: 6, z: 760 } }); c.grounded = false; c.climbing = { nx: 1, nz: 0, top: 30 }
+  step(c, { wire: true, wireAt: { x: 10, y: 0, z: 770, ground: true } })
+  expect(groundRopes === 0 && !(c.rope && c.rope.ground), JSON.stringify({ groundRopes, wall: c.rope })); return { tries, groundRopes }
+})
 await t('AI臭さチェック NG 0', () => {
   const out = execFileSync(process.execPath, [process.env.HOME + '/Desktop/claudecode/_shared/ai_tells.mjs', ROOT, '--json'], { encoding: 'utf8' })
   const j = JSON.parse(out); expect(j.ng === 0, JSON.stringify(j.items)); return j.items.map(i => i.key)
@@ -300,11 +381,11 @@ await t('3分たつと順位発表（表彰台・順位・Xのリンク）', asy
   const r = await p.evaluate(() => ({ mode: tt.mode, shown: !document.getElementById('result').classList.contains('hidden'), w: document.getElementById('podium').width, rank: document.getElementById('rankBig').textContent, post: document.getElementById('btnPost').href }))
   expect(r.mode === 'result' && r.shown && r.w === 720 && r.rank.length > 0 && /twitter\.com\/intent/.test(r.post), JSON.stringify(r)); return { rank: r.rank }
 })
-await t('何もしない3分は最下位', async () => {
+await t('何もしない3分は勝てない（0本・3位以下。車で CPU も取られるので、同じ0本の CPU とは取られた数の差で並ぶ）', async () => {
   await p.click('#btnAgain'); await p.evaluate(() => tt.dbg.pause(true))
   await p.evaluate(() => { tt.dbg.teleport(0, 0, 640); tt.dbg.step(60 * 182) }); await p.evaluate(() => tt.dbg.pause(false)); await p.waitForTimeout(2500)
   const r = await p.evaluate(() => ({ mode: tt.mode, rank: window.__lastRank, tails: tt.me.tails }))
-  expect(r.mode === 'result' && r.rank === 4, JSON.stringify(r)); return r
+  expect(r.mode === 'result' && r.rank >= 3 && r.tails === 0, JSON.stringify(r)); return r
 })
 await t('音: 鳴らした回数が数えられ、テスト中は実際に無音', async () => {
   const r = await p.evaluate(() => ({ calls: window.__soundCalls, played: Object.keys(Snd.played).length, ok: window.__muteOk() }))
@@ -315,6 +396,48 @@ await t('英語に切り替わる', async () => {
   const r = await p.evaluate(() => ({ start: document.getElementById('btnStart').textContent, logo: document.querySelector('.logo').textContent, lang: document.documentElement.lang }))
   expect(r.start === 'Play' && r.lang === 'en' && /Tail Tag/.test(r.logo), JSON.stringify(r))
   await p.click('#btnLang')
+})
+await t('車: 通りに車が描かれ（InstancedMesh）、はねられると2秒くらくら（星・文字・録音の音）', async () => {
+  await p.click('#btnStart'); await p.evaluate(() => { tt.dbg.pause(true); tt.dbg.freezeCpu(true) })
+  const r = await p.evaluate(() => {
+    tt.log.length = 0
+    const c = tt.m.traffic.cars.find(c => c.line.dx === 0 && c.z > 700 && c.z < 850 && Math.abs(c.x) < 300)
+    tt.dbg.teleport(c.x, 0, c.z + Math.sign(c.vz) * 3, 0); const s0 = Snd.played.car || 0
+    tt.dbg.step(2)
+    const ev = tt.log.find(e => e.t === 'car' && e.who === 0)
+    return { ev: !!ev, stun: +tt.me.r.stun.toFixed(2), say: document.getElementById('say').textContent, car: (Snd.played.car || 0) - s0, dizzy: Snd.played.dizzy || 0, calls: tt.carsDraw.drawCalls, inst: tt.carsDraw.drawCalls > 0 }
+  })
+  expect(r.ev && r.stun > 1.9 && /車|car/.test(r.say) && r.car >= 1 && r.inst, JSON.stringify(r)); return r
+})
+await t('スワイプの見回し感度は約1.2倍（横 0.0072・縦 0.0048）。115px 動かすと 0.828rad 回る', async () => {
+  const r = await p.evaluate(() => {
+    tt.cam.hd = 0; tt.cam.pitch = 0.1
+    const c = document.querySelector('#view canvas'), ev = (type, x, y) => (type === 'pointerdown' ? c : window).dispatchEvent(new PointerEvent(type, { pointerId: 31, clientX: x, clientY: y, bubbles: true }))
+    ev('pointerdown', 200, 400); ev('pointermove', 215, 400); ev('pointermove', 315, 450); ev('pointerup', 315, 450)
+    return { yaw: tt.LOOK.yaw, pitch: tt.LOOK.pitch, hd: +(-tt.cam.hd).toFixed(4), dp: +(tt.cam.pitch - 0.1).toFixed(4) }
+  })
+  expect(r.yaw === 0.0072 && r.pitch === 0.0048 && Math.abs(r.hd - 115 * 0.0072) < 1e-6 && Math.abs(r.dp - 50 * 0.0048) < 1e-6, JSON.stringify(r)); return r
+})
+await t('地面ワイヤー（画面）: 空中で道をタップすると地面に掛かる。地面に立っている時と、ワイヤーボタンでは地面に掛からない。建物をタップした時は建物', async () => {
+  const r = await p.evaluate(() => {
+    const me = tt.me.r, out = {}
+    me.stun = 0; me.carCd = 99   // 前のテストの気絶を消し、車にも当たらないように
+    tt.dbg.teleport(-130 + 1, 16, 760, 0); me.grounded = false; tt.cam.hd = 0; tt.cam.pitch = 0.5; tt.dbg.step(20); me.y = 16; me.vy = 0; me.rope = null
+    // 画面の下の方（道）を探してタップ
+    let pt = null
+    for (let sy = innerHeight - 260; sy > 300 && !pt; sy -= 20) { const h = tt.dbg.tapTarget(innerWidth / 2, sy); if (h && h.ground && h.y < 0.5) pt = { sy, h } }
+    out.found = !!pt
+    tt.dbg.pressWire(innerWidth / 2, pt.sy); tt.dbg.step(1); out.airGround = !!(me.rope && me.rope.ground)
+    me.rope = null; tt.dbg.teleport(-130 + 1, 0, 760, 0); tt.dbg.step(5); tt.cam.pitch = 0.5
+    tt.dbg.pressWire(innerWidth / 2, pt.sy); tt.dbg.step(1); out.standGround = !!(me.rope && me.rope.ground)
+    me.rope = null; tt.dbg.teleport(-130 + 1, 16, 760, 0); me.grounded = false; tt.dbg.wireAuto(); tt.dbg.step(1); out.buttonGround = !!(me.rope && me.rope.ground)
+    // 建物の壁: 画面の真ん中より上で、建物に当たる所
+    let bt = null
+    for (let sy = 120; sy < innerHeight / 2 && !bt; sy += 20) for (let sx = 30; sx < innerWidth - 30 && !bt; sx += 30) { const h = tt.dbg.tapTarget(sx, sy); if (h && !h.ground && !h.pole) bt = h }
+    out.building = !!bt && !bt.ground
+    return out
+  })
+  expect(r.found && r.airGround && !r.standGround && !r.buttonGround && r.building, JSON.stringify(r)); return r
 })
 await t('エラーが出ていない（通しのあと）', async () => { expect(p.errs.length === 0, p.errs.join('|')) })
 await p.close()

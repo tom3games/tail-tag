@@ -159,6 +159,8 @@ export class CharRunnerModel {
       roll = -Math.atan2(lx, Math.max(0.5, dy)) * 0.8
     }
     if (s.stun > 0 && st === 'air') { this.phase += dt * 14; roll = Math.sin(this.phase) * 0.8; pitch = Math.cos(this.phase * 0.7) * 0.9 }
+    // 気絶して地面にいる間は、ふらふら（左右に揺れて頭が回る）
+    if (s.stun > 0 && st !== 'air' && st !== 'down') { this.phase += dt * 7; roll = Math.sin(this.phase) * 0.3; pitch = 0.15 + Math.sin(this.phase * 0.5) * 0.12; g.rotation.y += Math.sin(this.phase * 0.6) * 0.6; if (st === 'idle') this.play('Idle_A') }
     const kk = 1 - Math.exp(-dt * 10)
     this.tilt.rotation.x += (pitch - this.tilt.rotation.x) * kk
     this.tilt.rotation.z += (roll - this.tilt.rotation.z) * kk

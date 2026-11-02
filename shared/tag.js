@@ -5,10 +5,13 @@
 // - 通りの地面（屋上・壁は別）に居続けると、しっぽが光ってばれる。光っている人は取られやすい（向かう速さで負ける）
 // - 電柱の上の方に、落ちているしっぽが下がっている。地面からは届かない（飛ばないと取れない）
 // - 3分（時間で昼→夕方→夜）。終わった時に持っている本数で順位
-import { RUN } from './runner.js?v=8'
+// - 通りには車が走る。地面で当たるとはね飛ばされて2秒気絶（操作が効かない・その間は取れない）。空中・ワイヤー中は当たらない
+import { RUN } from './runner.js?v=9'
+import { createTraffic, carHit, CARS } from './traffic.js?v=9'
 
 export const TAG = {
   sec: 180,
+  cars: true,           // 通りに車を走らせる（検証で前後を比べる時だけ切る）
   touchR: 2.2,          // 触れたとみなす距離（胸と胸）
   touchRMe: 3.0,        // 自分だけ少し広い（スマホで当てやすく）
   assistR: 11,          // 自分だけ: 取れる相手・落ちているしっぽがこれより近いと、空中で少し吸い寄せる
@@ -49,8 +52,8 @@ export function createMatch(world, runners, seed = 1, level = 'normal', mode = '
   const lv = TAG.levels[level] || TAG.levels.normal
   runners.forEach((rn, i) => { if (i > 0) rn.speedMul = lv.cpuSpeed })
   const flee = mode === 'flee'
-  const players = runners.map((rn, i) => ({ i, id: COLORS[i].id, r: rn, tails: flee ? (i === 0 ? FLEE.tails : 0) : 1, steals: 0, lost: 0, picks: 0, groundT: 0, glow: false, immune: 0, cd: {}, airT: 0, groundSum: 0 }))
-  const m = { t: 0, over: false, players, free: [], freeT: 3, events: [], rnd: r, world, seed, level, lv, mode }
+  const players = runners.map((rn, i) => ({ i, id: COLORS[i].id, r: rn, tails: flee ? (i === 0 ? FLEE.tails : 0) : 1, steals: 0, lost: 0, picks: 0, groundT: 0, glow: false, immune: 0, cd: {}, airT: 0, groundSum: 0, carHits: 0 }))
+  const m = { t: 0, over: false, players, free: [], freeT: 3, events: [], rnd: r, world, seed, level, lv, mode, traffic: TAG.cars ? createTraffic(world) : null }
   return m
 }
 
@@ -72,6 +75,16 @@ export function stepMatch(m, dt) {
     p.immune = Math.max(0, p.immune - dt)
     for (const k in p.cd) p.cd[k] = Math.max(0, p.cd[k] - dt)
   }
+  // 車: 地面の近くで当たったら、はね飛ばされて2秒気絶
+  if (m.traffic) {
+    m.traffic.update(m.t)
+    for (const p of P) {
+      if (p.r.carCd > 0) p.r.carCd = Math.max(0, p.r.carCd - dt)
+      const c = m.traffic.hitTest(p.r); if (!c) continue
+      const rel = carHit(p.r, c); p.carHits++
+      m.events.push({ t: 'car', who: p.i, speed: rel, x: p.r.x, y: p.r.y + 1, z: p.r.z, kind: c.kind })
+    }
+  }
   // 自分だけ: 空中で近くの取れる相手・しっぽへ少し吸い寄せる（初めての人でも当たるように）
   const me = P[0]
   if (me && !me.r.grounded && !me.r.climbing) {
@@ -92,11 +105,15 @@ export function stepMatch(m, dt) {
     // 相手へ向かう速さ。光っている人は 6m/s ぶん不利
     // 自分の上乗せ（meBonus）は、自分から向かっている時だけ（地面で待っていて相手が来ても取れない）
     let sa = A.r.vx * nx + A.r.vy * ny + A.r.vz * nz, sb = -(B.r.vx * nx + B.r.vy * ny + B.r.vz * nz)
+    // 気絶中は取れない（向かう速さに数えない）。気絶している人は止まっているので取られやすい
+    if (A.r.stun > 0) sa = -99
+    if (B.r.stun > 0) sb = -99
     if (A.i === 0 && sa > 2) sa += m.lv.meBonus
     if (B.i === 0 && sb > 2) sb += m.lv.meBonus
     sa -= A.glow ? 6 : 0; sb -= B.glow ? 6 : 0
     let thief = sa >= sb ? A : B, victim = thief === A ? B : A
     if (m.mode === 'flee') { if (A.i === 0) { thief = B; victim = A } else if (B.i === 0) { thief = A; victim = B } else continue }
+    if (thief.r.stun > 0) continue
     const sv = Math.max(sa, sb)
     // 逃げるだけ: 追手は自分に触れたら止まっていても取る（地面で立ち止まれば安全、にしない）
     const grab = m.mode === 'flee' && victim.i === 0 && thief.i !== 0

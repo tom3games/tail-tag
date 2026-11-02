@@ -15,7 +15,7 @@
 // 座標は車と同じ（x=東西, z=南北, yaw=0 で +z を向く）。y は足の高さ。
 // 体力は dmg.body（車と同じ名前にして、警察と犯人の判定 chase.js をそのまま使う）
 
-import { GAME } from './config.js?v=8'
+import { GAME } from './config.js?v=9'
 
 export const RUN = {
   radius: 0.42, height: 1.75,
@@ -46,6 +46,10 @@ export const RUN = {
   ropeG: 1.07,                  // ワイヤー中だけ重力を少し強く（振り子が速く回る）
   releaseVyMax: 9,              // 外した瞬間の上向きの速さの上限（振るたびに空へ昇り続けないように）
   drag: 0.012,
+  // 地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地面にもワイヤーつけて加速できるように」「地面をちゃんとタップしなあかん感じに」）
+  // 空中で画面の地面（道・屋上）をタップした時だけ。掛けた点へ gPull で加速し（直線で吸い込まない・最高速は maxSpeed のまま）、
+  // gOff m まで近づくか通り過ぎたら自動で外れて、進む向きに gSling 足して上へ gUp 跳ねる
+  gPull: 26, gOff: 4.5, gSling: 4, gUp: 8, gMax: 2.5,
   releaseKick: 1.2,             // ワイヤーを外した瞬間に上へ少し跳ねる
   downSec: 3.2,                 // 体力が尽きて倒れている時間
   waterY: -1.2,                 // 運河に落ちたらこれより下
@@ -348,7 +352,17 @@ export function stepRunner(r, inp, dt, world) {
       // 狙った点（画面をタッチ・クリックした所）があればそこへ。届かなければ自動で探す
       let a = null
       const w = inp.wireAt
-      if (w) {
+      if (w && w.ground) {
+        // 地面ワイヤー: 空中（地面に立っていない・壁でない）で、届く所だけ。地面にいる時は掛けない（狙いなしと同じに戻す）
+        const d = Math.hypot(w.x - r.x, w.y - (r.y + 1.2), w.z - r.z)
+        if (!fromGround && !r.climbing && d <= RUN.wireRange && d > RUN.gOff + 0.5) {
+          r.rope = { x: w.x, y: w.y, z: w.z, len: d, t: 0, ground: true }
+          r.climbing = null; r.combo = r.combo + 1; r.swings++
+          ev.push({ t: 'wire', x: w.x, y: w.y, z: w.z, combo: r.combo, ground: true })
+          a = false
+        } else if (fromGround || r.climbing) a = null
+        else { ev.push({ t: 'wireMiss', far: true, x: w.x, y: w.y, z: w.z, d }); a = false }
+      } else if (w) {
         const d = Math.hypot(w.x - r.x, w.y - (r.y + 1.5), w.z - r.z)
         if (d <= RUN.wireRange && w.y > r.y + 2) a = { x: w.x, y: w.y, z: w.z, len: d }
         else { a = findAnchor(world, r, Math.atan2(w.x - r.x, w.z - r.z)); if (!a) { ev.push({ t: 'wireMiss', far: true, x: w.x, y: w.y, z: w.z, d }); a = false } }   // 遠すぎる所を押したら、その向きで届く所を探す（空中出前と同じ）
@@ -455,8 +469,23 @@ function physics(r, thr, dt, world, passive) {
   const px = r.x, py = r.y, pz = r.z
   r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt
 
+  // 地面ワイヤー: 掛けた点へ加速する。近くまで来たか通り過ぎたら外れて跳ねる（スリングショット）
+  if (r.rope && r.rope.ground) {
+    const rp = r.rope
+    rp.t += dt
+    const dx = rp.x - r.x, dy = rp.y - (r.y + 1.2), dz = rp.z - r.z, d = Math.hypot(dx, dy, dz) || 1
+    const along = (r.vx * dx + r.vy * dy + r.vz * dz) / d
+    const low = r.vy < 0 && r.y - floorAt(world, r.x, r.z, r.y).h < 1.3   // 床（道・屋上）のすぐ上まで来た
+    if (d < RUN.gOff || low || (rp.t > 0.25 && along < 0) || rp.t > RUN.gMax) {
+      r.rope = null
+      const hv = Math.hypot(r.vx, r.vz) || 1
+      r.vx += r.vx / hv * RUN.gSling; r.vz += r.vz / hv * RUN.gSling
+      r.vy = Math.max(r.vy, 0) * 0.3 + RUN.gUp
+      r.events.push({ t: 'unwire', auto: true, ground: true })
+    } else { const k = RUN.gPull * dt / d; r.vx += dx * k; r.vy += dy * k; r.vz += dz * k }
+  }
   // ワイヤー: 長さより遠くへは行けない（外へ向かう速さを消す）
-  if (r.rope) {
+  if (r.rope && !r.rope.ground) {
     const rp = r.rope
     rp.t += dt
     const hx = r.x, hy = r.y + 1.2, hz = r.z
