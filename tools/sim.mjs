@@ -4,8 +4,10 @@ import { createWorld } from '../shared/track.js'
 import { setupArena } from '../shared/arena.js'
 import { createRunner, stepRunner } from '../shared/runner.js'
 import { createMatch, stepMatch, ranking, TAG } from '../shared/tag.js'
+const LEVEL = process.env.LEVEL || 'normal'
+if (process.env.NOLOCK) TAG.levels[LEVEL].lockR = 0
 import { createBot, botInput } from '../shared/tagbot.js'
-export const CPU_SKILL = [0.25, 0.45, 0.65]
+export const CPU_SKILL = TAG.levels[LEVEL].cpu
 const N = +(process.argv[2] || 12), only = process.argv[3]
 const world = setupArena(createWorld('city'))
 const dt = 1 / 60
@@ -13,7 +15,7 @@ export function spawns(b) { const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2
 export function play(kind, seed) {
   const sp = spawns(world.bounds)
   const rs = sp.map(([x, z, yaw], i) => createRunner({ id: 'p' + i, spawn: { x, y: 0, z, yaw } }))
-  const m = createMatch(world, rs, seed)
+  const m = createMatch(world, rs, seed, LEVEL)
   const bots = [createBot(kind, 0.6, seed * 7), ...CPU_SKILL.map((s, i) => createBot('cpu', s, seed * 13 + i))]
   let fly = 0, run = 0, flySpd = 0, runSpd = 0
   while (!m.over) {
@@ -26,7 +28,7 @@ export function play(kind, seed) {
   return { rank: rk.indexOf(m.players[0]) + 1, tails: m.players[0].tails, steals: m.players[0].steals, picks: m.players[0].picks, cpu: m.players.slice(1).map(p => p.tails), ground: m.players[0].groundSum, runV: run ? runSpd / run : 0, flyV: fly ? flySpd / fly : 0 }
 }
 if (import.meta.url === `file://${process.argv[1]}`) {
-  for (const k of only ? [only] : ['skilled', 'sloppy', 'ground', 'idle']) {
+  for (const k of only ? [only] : ['skilled', 'sloppy', 'human', 'beginner', 'ground', 'idle']) {
     const g = []; for (let s = 1; s <= N; s++) g.push(play(k, s))
     const avg = f => (g.reduce((a, x) => a + f(x), 0) / g.length)
     const cpuAvg = [0, 1, 2].map(i => avg(x => x.cpu[i]).toFixed(1)).join('/')

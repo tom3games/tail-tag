@@ -311,10 +311,24 @@ export function stepRunner(r, inp, dt, world) {
   if (r.stun > 0) { r.stun -= dt; thr = brk = steer = 0 }
   r.zipping = false   // 巻取ボタンは無い
 
+  // スティック（画面基準の向き moveDir）: 倒した向きへすぐ向き直る。地上も空中も「画面の左＝左」になる
+  // 2026-11-02 本人「カメラが1周回ったら左に抜けてるはずなのに右に動く」。前は向きを毎秒1.8〜3.4radでしか変えず、空中の力は今向いている方へだけ足していた
+  const md = r.stun > 0 ? null : inp.moveDir
+  if (md) {
+    const wantYaw = Math.atan2(md.x, md.z)
+    let d = wantYaw - r.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2
+    const rate = (r.grounded ? RUN.turn : RUN.airTurn) * 4 * dt
+    r.yaw += Math.max(-rate, Math.min(rate, d))
+    // 地上で真後ろへ倒した時は、向き直るまで前へ走らない（カメラの方へ走り出さない）
+    if (r.grounded) thr *= Math.max(0.15, Math.cos(Math.min(Math.abs(d), Math.PI / 2)))
+    steer = 0
+  }
   // 向き
   const turn = (r.grounded ? RUN.turn : r.rope ? RUN.airTurn * 1.2 : RUN.airTurn) * steer
   r.yaw -= turn * dt
   const fx = Math.sin(r.yaw), fz = Math.cos(r.yaw)
+  // 空中で力を足す向き: スティックがあれば倒した向き、無ければ向いている方
+  const ax = md ? md.x : fx, az = md ? md.z : fz
 
   // ワイヤー: 押すたびに 掛ける / 外す
   if (wirePress && r.stun <= 0) {
@@ -338,7 +352,7 @@ export function stepRunner(r, inp, dt, world) {
         if (d <= RUN.wireRange && w.y > r.y + 2) a = { x: w.x, y: w.y, z: w.z, len: d }
         else { a = findAnchor(world, r, Math.atan2(w.x - r.x, w.z - r.z)); if (!a) { ev.push({ t: 'wireMiss', far: true, x: w.x, y: w.y, z: w.z, d }); a = false } }   // 遠すぎる所を押したら、その向きで届く所を探す（空中出前と同じ）
       }
-      if (a === null) a = findAnchor(world, r)
+      if (a === null) a = findAnchor(world, r, inp.wireYaw)   // 狙いが無い時は wireYaw（画面の前・スティックの向き）、無ければ向いている方
       if (a) {
         const d = Math.hypot(a.x - r.x, a.y - (r.y + 1.2), a.z - r.z)
         // 長さは「振り子の一番下が、足元の地面から swingLow 上に来る」長さ。今の距離より長ければ、張るまで落ちてから振れる
@@ -394,16 +408,16 @@ export function stepRunner(r, inp, dt, world) {
     r.vx = fx * nf + fz * nl; r.vz = fz * nf - fx * nl
   } else {
     // 空中: 少しだけ前後に動ける
-    if (thr > 0) { r.vx += fx * RUN.airAccel * thr * dt; r.vz += fz * RUN.airAccel * thr * dt }
+    if (thr > 0) { r.vx += ax * RUN.airAccel * thr * dt; r.vz += az * RUN.airAccel * thr * dt }
     if (brk > 0) { r.vx *= 1 - 0.8 * dt; r.vz *= 1 - 0.8 * dt }
     if (r.rope) {
       // こぐ: 進む向きへ力を足す（振り子が大きくなる）
-      if (thr > 0 && r.vy < 2) { r.vx += fx * RUN.pump * dt; r.vz += fz * RUN.pump * dt }
+      if (thr > 0 && r.vy < 2) { r.vx += ax * RUN.pump * dt; r.vz += az * RUN.pump * dt }
       // 横へ流れる分を、向いている方へ寄せる（横の建物に掛けても前へ進む）
       const hv = Math.hypot(r.vx, r.vz)
       if (hv > 3) {
         const k = Math.min(1, RUN.steerAssist * dt)
-        const nx = r.vx / hv * (1 - k) + fx * k, nz = r.vz / hv * (1 - k) + fz * k, nl = Math.hypot(nx, nz) || 1
+        const nx = r.vx / hv * (1 - k) + ax * k, nz = r.vz / hv * (1 - k) + az * k, nl = Math.hypot(nx, nz) || 1
         r.vx = nx / nl * hv; r.vz = nz / nl * hv
       }
     }

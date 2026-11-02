@@ -1,7 +1,7 @@
 // CPU のしっぽ取り（WIRE ESCAPE の runnerbot と同じ考え方: 行きたい向きの前の建物・電柱にワイヤーを掛けてつなぐ）
 // 性格: cpu（skill 0〜1 で強さ）／検証用: skilled（上手い人）・sloppy（下手な人: 反応が遅く狙いが雑）・ground（地面だけ走る手抜き）・idle（何もしない）
 import { findAnchor, RUN } from './runner.js'
-import { TAG } from './tag.js'
+import { TAG, lockTarget } from './tag.js'
 
 const ang = a => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a }
 
@@ -34,6 +34,7 @@ export function botInput(b, p, m, world, dt) {
   const r = p.r
   const inp = { throttle: 0, steer: 0 }
   if (b.kind === 'idle' || m.over) return inp
+  if (b.kind === 'human' || b.kind === 'beginner') return humanInput(b, p, m, world, dt)
   b.retarget -= dt
   if (b.retarget <= 0 || !b.tgt || (b.tgt.kind === 'f' && !m.free.includes(b.tgt.f)) || (b.tgt.kind === 'p' && (b.tgt.o.tails <= 0 || b.tgt.o.immune > 0 || p.cd[b.tgt.o.i] > 0))) {
     b.tgt = pickGoal(b, p, m); b.retarget = 1.0 + (1 - b.skill) * 1.2
@@ -93,6 +94,41 @@ export function botInput(b, p, m, world, dt) {
   let jump = false
   if (b.stuck > 1.0) { jump = true; b.stuck = 0 }
   if (!inp.jump) { inp.jump = jump && !b.prevJ; b.prevJ = jump }
+  return inp
+}
+
+// 人のまね（スマホで初めて遊ぶ人）: スティックとワイヤーボタンだけ。反応は 0.35 秒遅れ、向きはぶれる。
+// ワイヤーはボタン（自動の狙い＝画面と同じ lockTarget かスティックの向き）。掛ける点を自分で選ばない・先回りしない
+function humanInput(b, p, m, world, dt) {
+  const r = p.r, inp = { throttle: 1, steer: 0 }
+  // 目標は画面の矢印と同じ（一番近い取れる相手か落ちている手ぬぐい）
+  let g = lockTarget(m, p)
+  if (!g) { let bd = 1e9; for (const o of m.players) if (o !== p && o.tails > 0 && o.immune <= 0) { const d = Math.hypot(o.r.x - r.x, o.r.z - r.z); if (d < bd) { bd = d; g = { x: o.r.x, y: o.r.y + 1.1, z: o.r.z } } } }
+  if (!g) g = { x: (world.bounds.x0 + world.bounds.x1) / 2, y: 0, z: (world.bounds.z0 + world.bounds.z1) / 2 }
+  // beginner（もっと不慣れな人）: 反応 0.6 秒遅れ・ぶれ大・ボタンを押すのも遅い
+  const beg = b.kind === 'beginner'
+  b.delay.push([g.x, g.y, g.z]); let [gx, gy, gz] = b.delay.length > (beg ? 36 : 21) ? b.delay.shift() : b.delay[0]
+  b.noiseT -= dt; if (b.noiseT <= 0) { b.noise = (b.rnd() - 0.5) * (beg ? 1.8 : 1.0); b.noiseT = 0.5 + b.rnd() * 0.8 }
+  const yaw = Math.atan2(gx - r.x, gz - r.z) + b.noise
+  inp.moveDir = { x: Math.sin(yaw), z: Math.cos(yaw) }
+  const dh = Math.hypot(gx - r.x, gz - r.z)
+  if (r.climbing) {
+    inp.climbY = gy > r.y + 1 ? 1 : gy < r.y - 2 ? -1 : 0
+    inp.climbX = 0
+  }
+  b.wT += dt
+  let wire = false
+  if (r.climbing) { if (inp.climbY === 0 || dh > 12) { b.cl = (b.cl || 0) + dt; if (b.cl > 0.8) { wire = true; b.cl = 0 } } }
+  else if (!r.rope) { if (b.wT > (beg ? 1.6 : 0.9) && (r.grounded || r.vy < -1) && (dh > 6 || gy > r.y + 3) && b.rnd() < 0.75 * dt * 60 / 20) { wire = true; b.wT = 0 } }
+  else {
+    // 離す: 目標を通り過ぎて上がり始めたら（人なので少し遅れる）、か長く振れていたら
+    b.ropeT = (b.ropeT || 0) + dt
+    const past = (gx - r.x) * r.vx + (gz - r.z) * r.vz < 0
+    if ((past && r.vy > 0 && b.ropeT > 0.6) || b.ropeT > 2.2 + b.rnd() * 0.02) { wire = true; b.ropeT = 0 }
+  }
+  if (!r.rope) b.ropeT = 0
+  inp.wire = wire && !b.prevW; b.prevW = wire
+  if (inp.wire) { const lt = lockTarget(m, p); inp.wireYaw = lt ? Math.atan2(lt.x - r.x, lt.z - r.z) : yaw }
   return inp
 }
 

@@ -20,7 +20,13 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .logo{font-family:var(--pop);font-weight:400;font-size:min(10.6vw,64px);white-space:nowrap;line-height:1.08;letter-spacing:.02em;text-shadow:0 3px 0 rgba(0,0,0,.25)}
 .logo span{display:inline-block;transform:rotate(-2.5deg);transform-origin:0 100%}
 .sub{margin-top:10px;font-size:15px;font-weight:700;line-height:1.5;max-width:20em;text-shadow:0 1px 8px rgba(0,0,0,.7)}
-.title-actions{margin-top:auto;display:flex;align-items:center;gap:18px;width:100%}
+/* 強さ: 物干しの洗濯ばさみに手ぬぐいが下がる見た目。選んだものだけ手ぬぐいの色がつく */
+.level{margin-top:auto;display:flex;align-items:flex-end;gap:10px;padding-top:14px;border-top:2px solid rgba(255,255,255,.55);width:max-content;max-width:100%}
+.level .lv-h{font-size:13px;font-weight:700;color:#fff;align-self:center;margin-right:2px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.level button{position:relative;font-weight:900;font-size:15px;color:#fff;padding:14px 10px 6px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.level button::before{content:'';position:absolute;left:50%;top:-6px;width:4px;height:12px;margin-left:-2px;background:#c9b27a;border-radius:1px}
+.level button[aria-checked=true]{background:var(--me);text-shadow:none;clip-path:polygon(0 0,100% 0,100% 88%,92% 100%,80% 90%,66% 100%,50% 90%,34% 100%,20% 90%,8% 100%,0 88%)}
+.title-actions{margin-top:14px;display:flex;align-items:center;gap:18px;width:100%}
 /* 押してほしいボタンはこれ1つだけ厚みをつける */
 .go{min-width:min(220px,58vw);padding:14px 26px;font-weight:900;font-size:24px;letter-spacing:.08em;color:#fff;background:var(--me);border-radius:999px 999px 999px 4px;box-shadow:0 5px 0 #7c2014,0 10px 22px rgba(0,0,0,.3);transition:transform .08s}
 .go:active{transform:translateY(4px);box-shadow:0 1px 0 #7c2014}

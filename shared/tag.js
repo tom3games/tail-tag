@@ -21,7 +21,15 @@ export const TAG = {
   grace: 5,             // 始まってすぐは光らない
   freeMax: 4,           // 落ちているしっぽの数（同時）
   freeEvery: 9,        // 取られたあと次が下がるまで
-  freeR: 2.6
+  freeR: 2.6,
+  // 難しさ（2026-11-02 本人「CPU はやれるやろうけどユーザーは難しそう」）。既定は かんたん。ふつう＝初版のまま
+  //  cpu: CPU 3人の強さ / cpuSpeed: CPU の走る速さの倍率 / meTouchR: 自分が触れたとみなす距離 / meBonus: ぶつかった時、自分の「向かう速さ」に足す分
+  //  meImmune: 自分が取られた後に取られない秒数 / assistR・assistAcc: 空中で取れる相手へ吸い寄せる距離と強さ / lockR: ワイヤーボタンが相手の方へ掛かる距離（0 で無し）
+  levels: {
+    easy:   { cpu: [0.14, 0.26, 0.4], cpuSpeed: 0.88, meTouchR: 4.0, meBonus: 3, meImmune: 6, assistR: 18, assistAcc: 20, lockR: 75 },
+    normal: { cpu: [0.25, 0.45, 0.65], cpuSpeed: 1, meTouchR: 3.0, meBonus: 0, meImmune: 4, assistR: 11, assistAcc: 12, lockR: 60 },
+    hard:   { cpu: [0.55, 0.75, 0.92], cpuSpeed: 1.05, meTouchR: 2.6, meBonus: -1, meImmune: 4, assistR: 0, assistAcc: 0, lockR: 0 }
+  }
 }
 
 export const COLORS = [
@@ -33,10 +41,12 @@ export const COLORS = [
 
 function rng(seed) { let s = (seed >>> 0) || 1; return () => (s = (s * 16807) % 2147483647) / 2147483647 }
 
-export function createMatch(world, runners, seed = 1) {
+export function createMatch(world, runners, seed = 1, level = 'normal') {
   const r = rng(seed)
+  const lv = TAG.levels[level] || TAG.levels.normal
+  runners.forEach((rn, i) => { if (i > 0) rn.speedMul = lv.cpuSpeed })
   const players = runners.map((rn, i) => ({ i, id: COLORS[i].id, r: rn, tails: 1, steals: 0, lost: 0, picks: 0, groundT: 0, glow: false, immune: 0, cd: {}, airT: 0, groundSum: 0 }))
-  const m = { t: 0, over: false, players, free: [], freeT: 3, events: [], rnd: r, world, seed }
+  const m = { t: 0, over: false, players, free: [], freeT: 3, events: [], rnd: r, world, seed, level, lv }
   return m
 }
 
@@ -61,10 +71,10 @@ export function stepMatch(m, dt) {
   // 自分だけ: 空中で近くの取れる相手・しっぽへ少し吸い寄せる（初めての人でも当たるように）
   const me = P[0]
   if (me && !me.r.grounded && !me.r.climbing) {
-    const c0 = chest(me); let tg = null, td = TAG.assistR
+    const c0 = chest(me); let tg = null, td = m.lv.assistR
     for (const o of P) if (o !== me && o.tails > 0 && o.immune <= 0 && !(me.cd[o.i] > 0)) { const c = chest(o), d = Math.hypot(c.x - c0.x, c.y - c0.y, c.z - c0.z); if (d < td) { td = d; tg = c } }
     for (const f of m.free) { const d = Math.hypot(f.x - c0.x, f.y - c0.y, f.z - c0.z); if (d < td) { td = d; tg = f } }
-    if (tg && td > 0.5) { const k = TAG.assistAcc * dt / td; me.r.vx += (tg.x - c0.x) * k; me.r.vy += (tg.y - c0.y) * k; me.r.vz += (tg.z - c0.z) * k }
+    if (tg && td > 0.5) { const k = m.lv.assistAcc * dt / td; me.r.vx += (tg.x - c0.x) * k; me.r.vy += (tg.y - c0.y) * k; me.r.vz += (tg.z - c0.z) * k }
   }
   // 触れたら奪う
   for (let a = 0; a < P.length; a++) for (let b = a + 1; b < P.length; b++) {
@@ -72,16 +82,19 @@ export function stepMatch(m, dt) {
     if (A.r.wreck > 0 || B.r.wreck > 0) continue
     const ca = chest(A), cb = chest(B)
     const dx = cb.x - ca.x, dy = cb.y - ca.y, dz = cb.z - ca.z, d = Math.hypot(dx, dy, dz)
-    const R = (A.i === 0 || B.i === 0) ? TAG.touchRMe : TAG.touchR
+    const R = (A.i === 0 || B.i === 0) ? m.lv.meTouchR : TAG.touchR
     if (d > R || d < 1e-4) continue
     const nx = dx / d, ny = dy / d, nz = dz / d
     // 相手へ向かう速さ。光っている人は 6m/s ぶん不利
-    let sa = A.r.vx * nx + A.r.vy * ny + A.r.vz * nz - (A.glow ? 6 : 0)
-    let sb = -(B.r.vx * nx + B.r.vy * ny + B.r.vz * nz) - (B.glow ? 6 : 0)
+    // 自分の上乗せ（meBonus）は、自分から向かっている時だけ（地面で待っていて相手が来ても取れない）
+    let sa = A.r.vx * nx + A.r.vy * ny + A.r.vz * nz, sb = -(B.r.vx * nx + B.r.vy * ny + B.r.vz * nz)
+    if (A.i === 0 && sa > 2) sa += m.lv.meBonus
+    if (B.i === 0 && sb > 2) sb += m.lv.meBonus
+    sa -= A.glow ? 6 : 0; sb -= B.glow ? 6 : 0
     let thief = sa >= sb ? A : B, victim = thief === A ? B : A
     const sv = Math.max(sa, sb)
     if (sv < TAG.minApproach || victim.tails <= 0 || victim.immune > 0 || thief.cd[victim.i] > 0) continue
-    victim.tails--; victim.lost++; victim.immune = TAG.immune
+    victim.tails--; victim.lost++; victim.immune = victim.i === 0 ? m.lv.meImmune : TAG.immune
     thief.tails++; thief.steals++; thief.cd[victim.i] = TAG.sameCd; thief.immune = Math.max(thief.immune, TAG.thiefImmune)
     // 取られた方は少しはじかれる（同じ所でもみ合わない）
     victim.r.vx += (victim === B ? nx : -nx) * 5; victim.r.vz += (victim === B ? nz : -nz) * 5; victim.r.vy += 2
@@ -116,6 +129,19 @@ export function stepMatch(m, dt) {
     }
   }
   if (m.t >= TAG.sec) { m.over = true; m.events.push({ t: 'end' }) }
+}
+
+// ワイヤーボタンの狙い（自分と、人のまねをする bot が使う）: 届く距離の中で一番近い「取れる相手」か落ちている手ぬぐい。無ければ null
+export function lockTarget(m, p) {
+  const R = m.lv.lockR; if (!R) return null
+  const r = p.r; let best = null, bd = R
+  for (const o of m.players) {
+    if (o === p || o.tails <= 0 || o.immune > 0 || p.cd[o.i] > 0 || o.r.wreck > 0) continue
+    const d = Math.hypot(o.r.x - r.x, o.r.y - r.y, o.r.z - r.z)
+    if (d < bd) { bd = d; best = { x: o.r.x + o.r.vx * 0.35, y: o.r.y + 1.1, z: o.r.z + o.r.vz * 0.35, who: o.i, d } }
+  }
+  for (const f of m.free) { const d = Math.hypot(f.x - r.x, f.y - r.y, f.z - r.z) - 8; if (d < bd) { bd = d; best = { x: f.x, y: f.y, z: f.z, free: true, d: d + 8 } } }
+  return best
 }
 
 // 順位（本数、同じなら奪った数、それも同じなら取られた数が少ない方）

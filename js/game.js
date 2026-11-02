@@ -11,19 +11,19 @@ import { Q } from './quality.js'
 import { RunnerModel } from './runnermodel.js'
 import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js'
 import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js'
-import { TAG, COLORS, createMatch, stepMatch, ranking } from '../shared/tag.js'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js'
 import { createBot, botInput } from '../shared/tagbot.js'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
 const URL_ = 'https://tom3games.github.io/tail-tag/'
-const CPU_SKILL = [0.25, 0.45, 0.65]
 const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } }
 
 // ---------------------------------------------------------------- 文言（日英）
 const T = {
   ja: {
     logo: '空中しっぽ取り', sub: 'ビルの谷間で、腰の手ぬぐいを奪い合う',
+    lvHead: '相手の強さ', lvEasy: 'かんたん', lvNormal: 'ふつう', lvHard: 'むずかしい',
     start: 'はじめる', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '準備中',
     howTitle: '遊び方', ok: 'わかった',
     howItems: [
@@ -46,6 +46,7 @@ const T = {
   },
   en: {
     logo: 'Tail Tag in the Sky', sub: 'Swing between towers and steal the towels tucked in their belts',
+    lvHead: 'Rivals', lvEasy: 'Easy', lvNormal: 'Normal', lvHard: 'Hard',
     start: 'Play', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Loading',
     howTitle: 'How to play', ok: 'Got it',
     howItems: [
@@ -67,6 +68,7 @@ const T = {
     postText: (r, n) => `I placed ${r} in Tail Tag in the Sky (${n} towels)`
   }
 }
+let level = ['easy', 'normal', 'hard'].includes(store.get('tt.level')) ? store.get('tt.level') : 'easy'
 let lang = store.get('tt.lang') || ((navigator.language || 'ja').startsWith('ja') ? 'ja' : 'en')
 const t = k => T[lang][k]
 const pname = i => COLORS[i].name[lang === 'ja' ? 0 : 1]
@@ -216,14 +218,18 @@ let m = null, bots = [], models = []
 let paused = false, dbgPause = false, endAt = 0
 const cam = { hd: 0, pitch: 0.15, userT: -1e9, pos: new THREE.Vector3(), off: new THREE.Vector3(-6, 3, 0), look: new THREE.Vector3(), lookOff: new THREE.Vector3(), fov: 64 }
 const _v = new THREE.Vector3(), _w = new THREE.Vector3()
+// ワイヤーボタンが向かう相手の目印（頭の上の輪）
+const lockRing = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.16, 6, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false }))
+lockRing.renderOrder = 10; lockRing.visible = false; scene.add(lockRing)
 const me = () => m && m.players[0]
 
 function spawnPoints() { const b = world.bounds, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2; return [[cx, cz - 40, 0], [cx + 60, cz, -Math.PI / 2], [cx, cz + 50, Math.PI], [cx - 60, cz, Math.PI / 2]] }
 function newMatch(seed, demo) {
   const sp = spawnPoints()
   const rs = sp.map(([x, z, yaw], i) => createRunner({ id: COLORS[i].id, spawn: { x, y: 0, z, yaw } }))
-  m = createMatch(world, rs, seed)
-  bots = [demo ? createBot('cpu', 0.6, seed) : null, ...CPU_SKILL.map((s, i) => createBot('cpu', s, seed * 13 + i))]
+  const lv = demo ? 'normal' : level
+  m = createMatch(world, rs, seed, lv)
+  bots = [demo ? createBot('cpu', 0.6, seed) : null, ...TAG.levels[lv].cpu.map((s, i) => createBot('cpu', s, seed * 13 + i))]
   rebuildModels()
 }
 function rebuildModels() {
@@ -302,22 +308,29 @@ function gather(r) {
   if (keys.has('KeyS') || keys.has('ArrowDown')) { brk = 1; cy -= 1 }
   if (keys.has('KeyA') || keys.has('ArrowLeft')) { steer -= 1; cx -= 1 }
   if (keys.has('KeyD') || keys.has('ArrowRight')) { steer += 1; cx += 1 }
+  // 画面の右と前（カメラの実際の向きから取る。cam.hd の計算に頼らない）
+  const e = camera.matrixWorld.elements
+  let rgx = e[0], rgz = e[2], fwx = -e[8], fwz = -e[10]
+  { const l1 = Math.hypot(rgx, rgz) || 1, l2 = Math.hypot(fwx, fwz) || 1; rgx /= l1; rgz /= l1; fwx /= l2; fwz /= l2 }
+  let moveDir = null
   if (stick.id != null) {
     const mag = Math.min(1, Math.hypot(stick.x, stick.y))
     if (mag > 0.15) {
-      // 空中出前と同じ効き方: 倒した向き（カメラから見て）へ走る。少し倒すだけで全力
-      const want = cam.hd + Math.atan2(-stick.x, -stick.y)
-      let d = want - r.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2
-      steer = Math.max(-1, Math.min(1, -d * 2.5)); thr = Math.max(thr, Math.min(1, mag * 1.3))
+      // 倒した向き（画面から見て）へ動く。少し倒すだけで全力
+      const dx = rgx * stick.x - fwx * stick.y, dz = rgz * stick.x - fwz * stick.y, l = Math.hypot(dx, dz) || 1
+      moveDir = { x: dx / l, z: dz / l }
+      thr = Math.max(thr, Math.min(1, mag * 1.3)); steer = 0
       cy = -stick.y; cx = stick.x
     }
   }
-  const inp = { throttle: thr, brake: brk, steer, jump: press.jump, wire: false }
+  const inp = { throttle: thr, brake: brk, steer, jump: press.jump, wire: false, moveDir }
+  // ワイヤーボタンの自動狙い: 近くに取れる相手（光る輪の相手）がいればその方へ（かんたん・ふつう）。いなければスティックの向き、スマホでは画面の前
+  const lt = m && mode === 'play' ? lockTarget(m, me()) : null
+  inp.wireYaw = lt ? Math.atan2(lt.x - r.x, lt.z - r.z) : moveDir ? Math.atan2(moveDir.x, moveDir.z) : touchMode ? Math.atan2(fwx, fwz) : undefined
   // 壁: スティックの上下＝上下、左右＝画面の左右（カメラから見て）
   if (r.climbing) {
     const cl = r.climbing, tx = -cl.nz, tz = cl.nx
-    const rx = Math.cos(cam.hd), rz = -Math.sin(cam.hd)   // カメラの右（cam.hd は前の向き）
-    const side = Math.sign(rx * tx + rz * tz) || 1
+    const side = Math.sign(rgx * tx + rgz * tz) || 1   // 画面の右と壁沿いの向きをそろえる（カメラの実際の向きから）
     inp.climbY = Math.abs(cy) > 0.25 ? Math.sign(cy) * Math.min(1, Math.abs(cy) * 1.3) : 0
     inp.climbX = Math.abs(cx) > 0.25 ? Math.sign(cx) * Math.min(1, Math.abs(cx) * 1.3) * side : 0
   }
@@ -382,6 +395,11 @@ function updateHud(dt) {
   let goal = null, gd = 1e9, gc = '#fff'
   for (const p of P) if (p !== me() && p.tails > 0 && p.immune <= 0) { const d = Math.hypot(p.r.x - r.x, p.r.z - r.z) - (p.glow ? 80 : 0); if (d < gd) { gd = d; goal = _w.set(p.r.x, p.r.y + 2.6, p.r.z); gc = COLORS[p.i].cloth } }
   for (const f of m.free) { const d = Math.hypot(f.x - r.x, f.z - r.z) - 10; if (d < gd) { gd = d; goal = _w.set(f.x, f.y + 1.2, f.z); gc = '#f2efe6' } }
+  // ワイヤーボタンが向かう相手（届く距離の中）には、頭の上に輪を出す。矢印も同じ相手を指す
+  const lt = lockTarget(m, me())
+  if (lt) { goal = _w.set(lt.x, lt.y + 1.5, lt.z); gc = lt.free ? '#f2efe6' : COLORS[lt.who].cloth }
+  lockRing.visible = !!lt
+  if (lt) { lockRing.position.set(lt.x, lt.y + (lt.free ? 1.6 : 2.2), lt.z); lockRing.material.color.set(gc); const k = performance.now() / 1000; lockRing.rotation.set(Math.PI / 2, 0, k * 2); lockRing.scale.setScalar(1 + Math.sin(k * 6) * 0.08) }
   const ar = $('arrow')
   if (!goal) { ar.classList.add('hidden'); return }
   const p = _v.copy(goal).project(camera)
@@ -493,6 +511,10 @@ function drawPodium(cv, rk, myRank) {
 }
 $('btnSave').onclick = () => { $('podium').toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'tail-tag-result.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000) }) }
 $('btnStart').onclick = () => startMatch()
+// 相手の強さ（既定は かんたん）
+function applyLevel() { for (const b of document.querySelectorAll('#level button')) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(b.dataset.lv === level)) } }
+for (const b of document.querySelectorAll('#level button')) b.onclick = () => { level = b.dataset.lv; store.set('tt.level', level); applyLevel() }
+applyLevel()
 $('btnAgain').onclick = () => startMatch()
 $('btnTitle').onclick = () => toTitle()
 $('btnHow').onclick = () => { Snd.init(); show('how') }
@@ -640,6 +662,7 @@ function render(dt) {
     if (endAt > 0) { endAt -= dt; if (endAt <= 0) showResult() }
     snapAt -= dt
   }
+  if (mode !== 'play') lockRing.visible = false
   renderer.render(scene, camera)
   // 結果の背景にする写真（一番本数が多かった瞬間）
   if (mode === 'play' && snapAt <= 0 && me().tails >= (photo && photo._n || 0)) { snapAt = 4; const c2 = document.createElement('canvas'); c2.width = 480; c2.height = Math.round(480 * innerHeight / innerWidth); c2.getContext('2d').drawImage(renderer.domElement, 0, 0, c2.width, c2.height); c2._n = me().tails; photo = c2 }
@@ -648,13 +671,13 @@ function render(dt) {
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.tt = {
-  get mode() { return mode }, log, get m() { return m }, get me() { return me() }, TAG, RUN, world, camera, touchMode, COLORS, rayHit,
+  get mode() { return mode }, log, get m() { return m }, get me() { return me() }, TAG, RUN, world, camera, touchMode, COLORS, rayHit, cam, get level() { return level }, setLevel: l => { level = l; applyLevel() }, lockTarget: () => m && lockTarget(m, me()),
   start: seed => startMatch(seed), toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
     teleport: (x, y, z, yaw) => { const r = me().r; Object.assign(r, { x, y, z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, grounded: y < 0.1 }); if (yaw != null) r.yaw = yaw },
     pressWire: (sx, sy) => aimAt(sx, sy), pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
-    keys, stick, say, setTime: f => { m.t = f * TAG.sec }, get models() { return models }, freezeCpu: on => { for (let i = 1; i < 4; i++) bots[i] = on ? createBot('idle') : createBot('cpu', CPU_SKILL[i - 1], i) }
+    keys, stick, say, setTime: f => { m.t = f * TAG.sec }, get models() { return models }, freezeCpu: on => { for (let i = 1; i < 4; i++) bots[i] = on ? createBot('idle') : createBot('cpu', TAG.levels[m.level].cpu[i - 1], i) }
   }
 }
 applyLang()

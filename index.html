@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rampart+One&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -29,6 +29,10 @@
   <div class="title-text">
     <h1 class="logo"><span data-t="logo"></span></h1>
     <p class="sub" data-t="sub"></p>
+  </div>
+  <div class="level" id="level" role="radiogroup">
+    <span class="lv-h" data-t="lvHead"></span>
+    <button data-lv="easy" data-t="lvEasy"></button><button data-lv="normal" data-t="lvNormal"></button><button data-lv="hard" data-t="lvHard"></button>
   </div>
   <div class="title-actions">
     <button id="btnStart" class="go" data-t="start"></button>
@@ -125,6 +129,6 @@
 })();
 </script>
 <script src="sfx.js?v=2"></script>
-<script type="module" src="js/game.js?v=3"></script>
+<script type="module" src="js/game.js?v=4"></script>
 </body>
 </html>

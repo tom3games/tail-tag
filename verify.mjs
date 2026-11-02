@@ -50,7 +50,7 @@ const fit = q => q.evaluate(() => {
     if (r.bottom > H + 1 || r.top < -1) over.push((el.id || el.className) + ':' + Math.round(r.top) + '-' + Math.round(r.bottom))
   }
   // 物干し・時計・休憩・スティック・跳ぶ・タイトルの部品が重ならない
-  const rs = [...document.querySelectorAll('#hud:not(.hidden) .line,#hud:not(.hidden) .clock,#hud:not(.hidden) #btnPause,#touch:not(.hidden) .tbtn,#touch:not(.hidden) .stick,.screen:not(.hidden) .go,.screen:not(.hidden) .text-btn,.screen:not(.hidden) .logo')].map(e => [e.id || e.className, e.getBoundingClientRect()])
+  const rs = [...document.querySelectorAll('#hud:not(.hidden) .line,#hud:not(.hidden) .clock,#hud:not(.hidden) #btnPause,#touch:not(.hidden) .tbtn,#touch:not(.hidden) .stick,.screen:not(.hidden) .go,.screen:not(.hidden) .text-btn,.screen:not(.hidden) .logo,.screen:not(.hidden) .level')].map(e => [e.id || e.className, e.getBoundingClientRect()])
   for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) { const a = rs[i][1], b = rs[j][1]; if (a.width && b.width && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) over.push('overlap ' + rs[i][0] + '×' + rs[j][0]) }
   const lg = document.querySelector('.screen:not(.hidden) .logo span'); if (lg && lg.getClientRects().length > 1) over.push('logo wraps')
   return { H, over: over.slice(0, 6) }
@@ -179,6 +179,13 @@ await t('bot: 上手い人が一番強く、地面だけ・何もしないは勝
   expect(r.skilled.rank < r.sloppy.rank && r.sloppy.rank < r.ground.rank && r.ground.wins === 0 && r.idle.wins === 0 && r.sloppy.none === 0 && r.skilled.rank <= 2.3, JSON.stringify(r))
   return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, `順位${v.rank} 1位${v.wins} 本数${v.tails}`]))
 })
+await t('かんたん（既定）: 不慣れな人（反応0.6秒遅れ・狙いがぶれる・ボタンだけ）でも平均2位以内・毎回1本は取る。地面だけは勝てない', () => {
+  const run = k => execFileSync(process.execPath, ['tools/sim.mjs', '12', k], { cwd: ROOT, encoding: 'utf8', timeout: 600000, env: { ...process.env, LEVEL: 'easy' } })
+  const get = (out, k) => { const l = out.split('\n').find(s => s.startsWith(k)); return { rank: +l.match(/順位 ([\d.]+)/)[1], wins: +l.match(/1位 (\d+)/)[1], none: +l.match(/1本も取れず (\d+)/)[1] } }
+  const b = get(run('beginner'), 'beginner'), g = get(run('ground'), 'ground')
+  expect(b.rank <= 2.0 && b.none === 0 && g.rank >= 3, JSON.stringify({ b, g }))
+  return { beginner: `順位${b.rank} 1位${b.wins}`, ground: `順位${g.rank}` }
+})
 await t('AI臭さチェック NG 0', () => {
   const out = execFileSync(process.execPath, [process.env.HOME + '/Desktop/claudecode/_shared/ai_tells.mjs', ROOT, '--json'], { encoding: 'utf8' })
   const j = JSON.parse(out); expect(j.ng === 0, JSON.stringify(j.items)); return j.items.map(i => i.key)
@@ -287,6 +294,107 @@ await t('英語に切り替わる', async () => {
 })
 await t('エラーが出ていない（通しのあと）', async () => { expect(p.errs.length === 0, p.errs.join('|')) })
 await p.close()
+
+// ---------------------------------------------------------------- 向き（スマホ）: カメラを何周回しても、スティックの左は画面の左（2026-11-02 本人「1周回ったら左のはずが右に動く」）
+{
+  const q = await open(browser, { hasTouch: true, isMobile: true })
+  await t('向き: カメラを0〜720°以上回しても、地上・空中・ワイヤー中でスティックの上下左右＝画面の上下左右（84通り）', async () => {
+    const out = await q.evaluate(() => {
+      tt.start(3); tt.dbg.freezeCpu(true); tt.dbg.pause(true)
+      const res = [], r = tt.me.r
+      const hds = [0, 1.2, Math.PI, 4.4, Math.PI * 2 + 0.5, -2.5, Math.PI * 4 + 2]
+      const dirs = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }
+      const run = (scen, hd, sx, sy) => {
+        tt.dbg.setTime(0)
+        const Y = scen === 'ground' ? 0 : 25
+        tt.cam.hd = hd; tt.cam.userT = performance.now()
+        for (let i = 0; i < 120; i++) { tt.dbg.teleport(0, Y, 650, 0); tt.dbg.step(1) }
+        tt.dbg.teleport(0, Y, 650, 0)
+        if (scen !== 'ground') { r.vz = 12; r.vx = 0; r.vy = 0; r.grounded = false }
+        if (scen === 'rope') r.rope = { x: 0, y: 50, z: 658, len: Math.hypot(50 - 26.2, 8) + 0.3, t: 1 }
+        tt.dbg.step(1)
+        const e = tt.camera.matrixWorld.elements
+        let rx = e[0], rz = e[2], fx = -e[8], fz = -e[10]; const l1 = Math.hypot(rx, rz), l2 = Math.hypot(fx, fz); rx /= l1; rz /= l1; fx /= l2; fz /= l2
+        const x0 = r.x, z0 = r.z
+        if (sx || sy) { tt.dbg.stick.id = 99; tt.dbg.stick.x = sx; tt.dbg.stick.y = sy }
+        tt.dbg.step(36)
+        tt.dbg.stick.id = null; tt.dbg.stick.x = tt.dbg.stick.y = 0
+        const dx = r.x - x0, dz = r.z - z0
+        return { side: dx * rx + dz * rz, fwd: dx * fx + dz * fz }
+      }
+      for (const scen of ['ground', 'air', 'rope']) for (const hd of hds) {
+        const base = run(scen, hd, 0, 0)
+        for (const [nm, [sx, sy]] of Object.entries(dirs)) { const m = run(scen, hd, sx, sy); res.push({ scen, hd: +hd.toFixed(2), nm, side: m.side - base.side, fwd: m.fwd - base.fwd }) }
+      }
+      tt.dbg.pause(false)
+      return res
+    })
+    const bad = out.filter(o => { const main = o.nm === 'left' ? -o.side : o.nm === 'right' ? o.side : o.nm === 'up' ? o.fwd : -o.fwd; const other = o.nm === 'left' || o.nm === 'right' ? Math.abs(o.fwd) : Math.abs(o.side); return !(main > 0.3 && main > other * 0.6) })
+    expect(bad.length === 0, JSON.stringify(bad.slice(0, 3)))
+    return { cases: out.length }
+  })
+  await t('向き: 壁に張り付いている時も、スティックの左右＝画面の左右（カメラを壁の両側・何周回しても）', async () => {
+    const out = await q.evaluate(() => {
+      tt.toTitle(); tt.start(4); tt.dbg.freezeCpu(true); tt.dbg.pause(true)
+      const r = tt.me.r, res = []
+      // 一番近い建物の壁を探して張り付く
+      const W = tt.world, b = W.colliders.filter(o => o.kind === 'building' && o.y1 > 20 && !o.yaw).sort((a, c) => Math.hypot(a.cx, a.cz - 650) - Math.hypot(c.cx, c.cz - 650))[0]
+      const wx = b.cx, wz = b.cz - b.hl, nx = 0, nz = -1   // 南側の面（-z を向く）
+      for (const hd of [0, 0.6, -0.6, Math.PI * 2 + 0.3, Math.PI * 4 - 0.4]) for (const sx of [-1, 1]) {
+        tt.dbg.setTime(0)
+        tt.cam.hd = hd; tt.cam.userT = performance.now()
+        for (let i = 0; i < 90; i++) { tt.dbg.teleport(wx, 8, wz - 0.6, 0); r.climbing = { nx, nz, top: b.y1, obj: b }; r.grounded = false; tt.dbg.step(1) }
+        const e = tt.camera.matrixWorld.elements; let rx = e[0], rz = e[2]; const l = Math.hypot(rx, rz); rx /= l; rz /= l
+        const x0 = r.x, z0 = r.z
+        tt.dbg.stick.id = 99; tt.dbg.stick.x = sx; tt.dbg.stick.y = 0; tt.dbg.step(30); tt.dbg.stick.id = null; tt.dbg.stick.x = 0
+        res.push({ hd: +hd.toFixed(2), sx, side: (r.x - x0) * rx + (r.z - z0) * rz, climbing: !!r.climbing })
+      }
+      tt.dbg.pause(false)
+      return res
+    })
+    const bad = out.filter(o => !(o.side * o.sx > 0.3))
+    expect(bad.length === 0, JSON.stringify(bad.slice(0, 3)))
+    return { cases: out.length }
+  })
+  await t('ワイヤーボタン: 近くに取れる相手がいればその方へ掛かり（かんたん）、頭の上に輪が出る。むずかしいでは画面の前へ', async () => {
+    const r = await q.evaluate(() => {
+      const out = {}
+      for (const lv of ['easy', 'hard']) {
+        tt.toTitle(); tt.setLevel(lv); tt.start(5); tt.dbg.freezeCpu(true); tt.dbg.pause(true)
+        const me = tt.me.r, rival = tt.m.players[1].r
+        // 自分は通りの真ん中、カメラは北向き。相手は右後ろ（南東）40m の空中
+        tt.cam.hd = 0; tt.cam.userT = performance.now()
+        for (let i = 0; i < 60; i++) { tt.dbg.teleport(0, 0, 690, 0); tt.dbg.step(1) }
+        Object.assign(rival, { x: 28, y: 14, z: 662, vx: 0, vy: 0, vz: 0, grounded: false, rope: null })
+        tt.dbg.step(1)
+        const lt = tt.lockTarget()
+        tt.dbg.wireAuto(); tt.dbg.step(2)
+        const a = me.rope
+        const e = tt.camera.matrixWorld.elements; let fx = -e[8], fz = -e[10]; const l = Math.hypot(fx, fz); fx /= l; fz /= l
+        out[lv] = { lock: !!lt, rope: !!a, towardRival: a ? ((a.x - me.x) * (rival.x - me.x) + (a.z - me.z) * (rival.z - me.z)) / (Math.hypot(a.x - me.x, a.z - me.z) * Math.hypot(rival.x - me.x, rival.z - me.z)) : null, towardScreen: a ? ((a.x - me.x) * fx + (a.z - me.z) * fz) / Math.hypot(a.x - me.x, a.z - me.z) : null }
+      }
+      tt.setLevel('easy'); tt.dbg.pause(false)
+      return out
+    })
+    expect(r.easy.lock && r.easy.rope && r.easy.towardRival > 0.5 && !r.hard.lock && r.hard.rope && r.hard.towardScreen > 0.3, JSON.stringify(r))
+    return r
+  })
+  await t('相手の強さ: 既定は かんたん。選ぶと保存され、CPU の強さが変わる', async () => {
+    const r = await q.evaluate(() => {
+      localStorage.removeItem('tt.level'); tt.toTitle()
+      const sel = () => document.querySelector('#level [aria-checked=true]').dataset.lv
+      const a = { def: tt.level, shown: sel() }
+      document.querySelector('#level [data-lv=hard]').click()
+      a.after = sel(); a.saved = localStorage.getItem('tt.level')
+      tt.start(6); a.level = tt.m.level
+      document.querySelector('#level [data-lv=easy]').click(); tt.toTitle(); document.querySelector('#level [data-lv=easy]').click()
+      return a
+    })
+    expect(r.def === 'easy' && r.shown === 'easy' && r.after === 'hard' && r.saved === 'hard' && r.level === 'hard', JSON.stringify(r))
+  })
+  await t('向きのテストでエラーなし', async () => { expect(q.errs.length === 0, q.errs.join('|')) })
+  await q.close()
+}
 
 // ---------------------------------------------------------------- 6サイズ × 全画面
 const SIZES = [[360, 640, 'small'], [390, 844, 'phone'], [844, 390, 'land'], [667, 375, 'land-se'], [768, 1024, 'tab'], [1440, 900, 'pc']]
