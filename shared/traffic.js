@@ -2,8 +2,8 @@
 // 2026-11-03 本人「これも車を結構走らせといて欲しい。ぶつかったら2秒間混乱というか気絶というか」
 // - 位置は試合の時刻だけで決まる（左側通行・対向車線にも車）。通りの端（工事の柵の外 EXT m）まで行くと反対の端から出てくる
 // - 地面の近く（足が車の屋根より下）で当たると、はね飛ばされて2秒気絶。ワイヤー中・壁・屋上・空中の高い所では当たらない
-import { AREA } from './arena.js?v=9'
-import { hitByCar } from './runner.js?v=9'
+import { AREA } from './arena.js?v=10'
+import { hitByCar } from './runner.js?v=10'
 
 export const CARS = {
   gap: 52,              // 車線何 m に1台（空中出前は 210m、WIRE ESCAPE は 340m。範囲が狭いので詰める）

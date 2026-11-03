@@ -260,17 +260,35 @@ await t('bot と車: 地面だけ走る人は何度もはねられ、空中で�
   expect(r.ground.me >= 2 && r.skilled.me <= 0.5 && r.ground.me > r.human.me * 3 && r.skilled.cpu < 1 && r.ground.cpu < 1, JSON.stringify(r)); return r
 })
 // ---------------------------------------------------------------- 地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地面にもワイヤーつけて加速」「地面をちゃんとタップしなあかん感じに」）
-await t('地面ワイヤー: 地面にいる時は地面に掛からない。空中では掛かって加速し、近くで外れて上へ跳ねる（瞬間移動しない）', () => {
+await t('地面ワイヤー: 地面にいる時は地面に掛からない。空中では掛かってはっきり速くなる（水平 +15m/s 以上・上限41は守る・瞬間移動しない）', () => {
   const g = createRunner({ id: 'g', spawn: { x: 0, y: 0, z: 760, yaw: 0 } })
   step(g, { wire: true, wireAt: { x: 0, y: 0, z: 790, ground: true } })
   const onGround = !!(g.rope && g.rope.ground)
-  const r = createRunner({ id: 'a', spawn: { x: 0, y: 14, z: 760, yaw: 0 } }); r.grounded = false; r.vz = 10
-  step(r, { wire: true, wireAt: { x: 0, y: 0, z: 800, ground: true } })
-  const hooked = !!(r.rope && r.rope.ground)
-  let rel = null, maxStep = 0, maxV = 0, t = 0
-  for (let i = 0; i < 240 && !rel; i++) { const px = r.x, py = r.y, pz = r.z; step(r, {}); t += 1 / 60; maxStep = Math.max(maxStep, Math.hypot(r.x - px, r.y - py, r.z - pz)); maxV = Math.max(maxV, Math.hypot(r.vx, r.vy, r.vz)); if (!r.rope) rel = { t: +t.toFixed(2), hv: +Math.hypot(r.vx, r.vz).toFixed(1), vy: +r.vy.toFixed(1), y: +r.y.toFixed(1), ev: r.events.some(e => e.t === 'unwire' && e.ground) } }
-  expect(!onGround && hooked && rel && rel.ev && rel.hv > 20 && rel.vy > 4 && maxStep < 0.75 && maxV < RUN.maxSpeed + 5, JSON.stringify({ onGround, hooked, rel, maxStep, maxV }))
-  return { onGround, hooked, release: rel, maxStep: +maxStep.toFixed(2) }
+  const res = {}
+  for (const [k, y, v, tz] of [['low', 8, 15, 25], ['high', 14, 10, 40]]) {
+    const r = createRunner({ id: 'a', spawn: { x: 0, y, z: 700, yaw: 0 } }); r.grounded = false; r.vz = v
+    step(r, { wire: true, wireAt: { x: 0, y: 0, z: 700 + tz, ground: true } })
+    const hooked = !!(r.rope && r.rope.ground)
+    let hMax = 0, maxV = 0, maxStep = 0
+    for (let i = 0; i < 180 && r.rope; i++) { const px = r.x, py = r.y, pz = r.z; step(r, {}); maxStep = Math.max(maxStep, Math.hypot(r.x - px, r.y - py, r.z - pz)); maxV = Math.max(maxV, Math.hypot(r.vx, r.vy, r.vz)); if (r.rope) hMax = Math.max(hMax, Math.hypot(r.vx, r.vz)) }
+    res[k] = { hooked, start: v, hMax: +hMax.toFixed(1), maxV: +maxV.toFixed(2), maxStep: +maxStep.toFixed(2) }
+  }
+  const ok = Object.values(res).every(x => x.hooked && x.hMax >= x.start + 15 && x.maxV <= RUN.maxSpeed + 1e-6 && x.maxStep < 0.8)
+  expect(!onGround && ok, JSON.stringify({ onGround, res })); return res
+})
+await t('地面ワイヤー: 床の近くで外れても上に跳ね返らず、そのまま着地して走る（前への勢いが少し残る）', () => {
+  const r = createRunner({ id: 'a', spawn: { x: 0, y: 8, z: 700, yaw: 0 } }); r.grounded = false; r.vz = 15
+  step(r, { wire: true, wireAt: { x: 0, y: 0, z: 725, ground: true } })
+  let relY = null, rise = 0, landT = null, t = 0, upOnGround = 0, v05 = null, ev = null
+  for (let i = 0; i < 240; i++) {
+    step(r, { throttle: 1 }); t += 1 / 60
+    if (!r.rope && relY == null) { relY = r.y; ev = r.events.find(e => e.t === 'unwire' && e.ground) }
+    if (relY != null && landT == null) rise = Math.max(rise, r.y - relY)
+    if (relY != null && landT == null && r.grounded) landT = t
+    if (landT != null) { upOnGround = Math.max(upOnGround, r.y); if (v05 == null && t - landT >= 0.5) v05 = Math.hypot(r.vx, r.vz) }
+  }
+  expect(ev && !ev.high && rise < 0.05 && upOnGround < 0.05 && v05 > RUN.walk * 2, JSON.stringify({ ev, rise, upOnGround, v05 }))
+  return { rise: +rise.toFixed(2), afterLand05: +v05.toFixed(1), walk: RUN.walk }
 })
 await t('地面ワイヤー: ワイヤーボタン（自動の狙い）では空中でも地面に掛からない・壁に張り付き中も掛からない', () => {
   let groundRopes = 0, tries = 0

@@ -1,20 +1,20 @@
 // 空中しっぽ取り。WIRE ESCAPE のワイヤーと街で、CPU 3人と腰の手ぬぐい（しっぽ）を取り合う
 // 地面に居続けるとしっぽが光ってばれる。3分で昼から夜になる。終わった時の本数で順位
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=9'
-import { createWorld } from '../shared/track.js?v=9'
-import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=9'
-import { buildScene } from './scene.js?v=9'
-import { FX } from './fx.js?v=9'
-import { loadSky, setAniso } from './look.js?v=9'
-import { Q, LOW } from './quality.js?v=9'
-import { trafficMeshes } from './carmodel.js?v=9'
-import { createTraffic, CARS } from '../shared/traffic.js?v=9'
-import { RunnerModel } from './runnermodel.js?v=9'
-import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=9'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=9'
-import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=9'
-import { createBot, botInput } from '../shared/tagbot.js?v=9'
+import { GAME } from '../shared/config.js?v=10'
+import { createWorld } from '../shared/track.js?v=10'
+import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=10'
+import { buildScene } from './scene.js?v=10'
+import { FX } from './fx.js?v=10'
+import { loadSky, setAniso } from './look.js?v=10'
+import { Q, LOW } from './quality.js?v=10'
+import { trafficMeshes } from './carmodel.js?v=10'
+import { createTraffic, CARS } from '../shared/traffic.js?v=10'
+import { RunnerModel } from './runnermodel.js?v=10'
+import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=10'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=10'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=10'
+import { createBot, botInput } from '../shared/tagbot.js?v=10'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -458,14 +458,14 @@ function placeCompass(el, ang) { el.style.left = '50%'; el.style.top = ''; el.qu
 const log = []
 function onRunnerEvent(e) {
   log.push({ src: 'r', ...e, at: +m.t.toFixed(2) })
-  if (e.t === 'wire') { sfx('wire', { vol: 0.7 }); sfx('hook', { vol: 0.5, delay: 0.06 }) }
+  if (e.t === 'wire') { sfx('wire', { vol: 0.7 }); sfx('hook', { vol: 0.5, delay: 0.06 }); if (e.ground) fovKick = 6 }   // 地面に掛けた瞬間はぐっと引かれる
   else if (e.t === 'wireMiss') {
     sfx('wire', { vol: 0.4, rate: 1.3 })
     const tp = me().r._tap
     if (e.far && tp && tp.sx != null) { const el = $('miss'); el.style.left = tp.sx + 'px'; el.style.top = tp.sy + 'px'; el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; clearTimeout(el._t); el._t = setTimeout(() => el.classList.add('hidden'), 800) }
   } else if (e.t === 'land') { sfx('land', { vol: Math.min(1, 0.3 + e.impact / 20) }); if (e.impact > 14) { sfx('bonk', { vol: 0.5 }); fx.addShake(Math.min(0.6, e.impact / 40)) } }
   else if (e.t === 'bonk') { sfx('bonk', { vol: 0.8 }); fx.addShake(0.4) }
-  else if (e.t === 'unwire' && e.ground) { sfx('whoosh', { vol: 0.7, rate: 1.05 }); fovKick = 7 }   // 地面ワイヤーが外れて跳ねる
+  else if (e.t === 'unwire' && e.ground) { sfx('whoosh', { vol: e.high ? 0.7 : 0.45, rate: 1.05 }); fovKick = e.high ? 7 : 4 }   // 地面ワイヤーが外れる（高い所なら跳ねる、床の近くならそのまま着地）
   else if (e.t === 'unwire' && !e.auto) { const r = me().r, v = Math.hypot(r.vx, r.vy, r.vz); if (v > 16) { sfx('whoosh', { vol: Math.min(0.8, v / 50), rate: 0.9 + Math.random() * 0.2 }); fovKick = Math.min(6, (v - 16) * 0.3) } }   // 速く離すと風を切る
 }
 function onMatchEvent(e) {
