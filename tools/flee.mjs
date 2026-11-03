@@ -1,9 +1,9 @@
 // 逃げるだけモードの釣り合い。node tools/flee.mjs [回数]
-import { createWorld } from '../shared/track.js?v=10'
-import { setupArena } from '../shared/arena.js?v=10'
-import { createRunner, stepRunner } from '../shared/runner.js?v=10'
-import { createMatch, stepMatch, TAG } from '../shared/tag.js?v=10'
-import { createBot, botInput } from '../shared/tagbot.js?v=10'
+import { createWorld } from '../shared/track.js?v=11'
+import { setupArena } from '../shared/arena.js?v=11'
+import { createRunner, stepRunner } from '../shared/runner.js?v=11'
+import { createMatch, stepMatch, TAG } from '../shared/tag.js?v=11'
+import { createBot, botInput } from '../shared/tagbot.js?v=11'
 const N = +(process.argv[2] || 8)
 if (process.env.NOCARS) TAG.cars = false
 const w = setupArena(createWorld('city')), b = w.bounds, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2

@@ -590,19 +590,24 @@ await t('WebKit: タップで始まってスマホ操作が出る（巻取・跳
   const r = await wp.evaluate(() => ({ mode: tt.mode, touch: !document.getElementById('touch').classList.contains('hidden'), btns: [...document.querySelectorAll('.tbtn')].map(b => b.dataset.k), mute: window.__muteOk(), calls: window.__soundCalls }))
   expect(r.mode === 'play' && r.touch && r.btns.join() === 'wire' && r.mute, JSON.stringify(r)); return r
 })
-await t('WebKit: スティックで走る', async () => {
-  const box = await wp.locator('#stickZone').boundingBox()
+await t('WebKit: 左スティックは左下に固定（触った所に動かない）・倒すと進む・左の上の方を触ってもスティックにならない', async () => {
+  const st0 = await wp.locator('#stick').boundingBox()
   const x0 = await wp.evaluate(() => [tt.me.r.x, tt.me.r.z])
-  await wp.evaluate(({ x, y }) => {
-    const el = document.getElementById('stickZone')
-    const ev = (type, cx, cy) => el.dispatchEvent(new PointerEvent(type, { pointerId: 7, clientX: cx, clientY: cy, bubbles: true, pointerType: 'touch' }))
-    ev('pointerdown', x, y); ev('pointermove', x, y - 50)
-  }, { x: box.x + box.width * 0.4, y: box.y + box.height * 0.7 })
+  const cx = st0.x + st0.width / 2, cy = st0.y + st0.height / 2
+  const ev = (type, x, y) => wp.evaluate(({ type, x, y }) => document.getElementById('stickZone').dispatchEvent(new PointerEvent(type, { pointerId: 7, clientX: x, clientY: y, bubbles: true, pointerType: 'touch' })), { type, x, y })
+  await ev('pointerdown', cx + 25, cy - 10); const st1 = await wp.locator('#stick').boundingBox()
+  await ev('pointermove', cx, cy - 50)
   await wp.waitForTimeout(1200)
   const x1 = await wp.evaluate(() => [tt.me.r.x, tt.me.r.z])
+  const st2 = await wp.locator('#stick').boundingBox()
+  await ev('pointerup', cx, cy - 50)
   const d = Math.hypot(x1[0] - x0[0], x1[1] - x0[1])
-  await wp.evaluate(() => { const el = document.getElementById('stickZone'); el.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, bubbles: true, pointerType: 'touch' })) })
-  expect(d > 3, d); return { moved: +d.toFixed(1) }
+  const same = [st1, st2].every(b => Math.abs(b.x - st0.x) < 0.5 && Math.abs(b.y - st0.y) < 0.5)
+  // 左の上の方（スティックから遠い所）: スティックは握られない
+  const far = await wp.evaluate(() => { const v = innerHeight * 0.3, el = document.elementFromPoint(40, v); return { zone: !!(el && el.closest('#stickZone')) } })
+  const vp = wp.viewportSize()
+  const inView = st0.x >= 0 && st0.y + st0.height <= vp.height
+  expect(d > 3 && same && !far.zone && inView, JSON.stringify({ d, same, far, st0 })); return { moved: +d.toFixed(1), fixedAt: [Math.round(cx), Math.round(cy)] }
 })
 await t('WebKit: 右下の大きいワイヤーボタンで掛かって、もう一回で離れる', async () => {
   await wp.evaluate(() => { tt.me.r.rope = null })

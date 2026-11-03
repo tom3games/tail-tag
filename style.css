@@ -95,7 +95,8 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .corner-btn svg{width:22px;height:22px;fill:#fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}
 /* スマホ操作: 左のスティックと、右の跳ぶだけ */
 .touch{position:absolute;inset:0;pointer-events:none}
-.stickzone{position:absolute;left:0;bottom:0;width:46%;height:62%;pointer-events:auto;touch-action:none}
+/* 左スティックは左下に固定（2026-11-03 本人「左スティックは固定で」）。触る所はスティックの円の少し外まで */
+.stickzone{position:absolute;left:0;bottom:0;width:calc(max(16px,env(safe-area-inset-left)) + 62px + 88px);height:calc(max(16px,env(safe-area-inset-bottom)) + 62px + 88px);pointer-events:auto;touch-action:none}
 .stick{position:absolute;left:calc(max(16px,env(safe-area-inset-left)) + 62px);top:calc(100% - max(16px,env(safe-area-inset-bottom)) - 62px);width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(14,18,34,.22);opacity:.65;pointer-events:none}
 .stick.held{opacity:1}
 .stick .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(243,239,228,.85)}

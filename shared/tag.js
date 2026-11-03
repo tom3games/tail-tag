@@ -6,8 +6,8 @@
 // - 電柱の上の方に、落ちているしっぽが下がっている。地面からは届かない（飛ばないと取れない）
 // - 3分（時間で昼→夕方→夜）。終わった時に持っている本数で順位
 // - 通りには車が走る。地面で当たるとはね飛ばされて2秒気絶（操作が効かない・その間は取れない）。空中・ワイヤー中は当たらない
-import { RUN } from './runner.js?v=10'
-import { createTraffic, carHit, CARS } from './traffic.js?v=10'
+import { RUN } from './runner.js?v=11'
+import { createTraffic, carHit, CARS } from './traffic.js?v=11'
 
 export const TAG = {
   sec: 180,
