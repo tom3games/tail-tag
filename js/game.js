@@ -1,20 +1,20 @@
 // 空中しっぽ取り。WIRE ESCAPE のワイヤーと街で、CPU 3人と腰の手ぬぐい（しっぽ）を取り合う
 // 地面に居続けるとしっぽが光ってばれる。3分で昼から夜になる。終わった時の本数で順位
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=11'
-import { createWorld } from '../shared/track.js?v=11'
-import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=11'
-import { buildScene } from './scene.js?v=11'
-import { FX } from './fx.js?v=11'
-import { loadSky, setAniso } from './look.js?v=11'
-import { Q, LOW } from './quality.js?v=11'
-import { trafficMeshes } from './carmodel.js?v=11'
-import { createTraffic, CARS } from '../shared/traffic.js?v=11'
-import { RunnerModel } from './runnermodel.js?v=11'
-import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=11'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=11'
-import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=11'
-import { createBot, botInput } from '../shared/tagbot.js?v=11'
+import { GAME } from '../shared/config.js?v=12'
+import { createWorld } from '../shared/track.js?v=12'
+import { setupArena, AREA, POLE_H } from '../shared/arena.js?v=12'
+import { buildScene } from './scene.js?v=12'
+import { FX } from './fx.js?v=12'
+import { loadSky, setAniso } from './look.js?v=12'
+import { Q, LOW } from './quality.js?v=12'
+import { trafficMeshes } from './carmodel.js?v=12'
+import { createTraffic, CARS } from '../shared/traffic.js?v=12'
+import { RunnerModel } from './runnermodel.js?v=12'
+import { CharRunnerModel, loadCharAssets, charAssets, makeTowel } from './charmodel.js?v=12'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=12'
+import { TAG, COLORS, createMatch, stepMatch, ranking, lockTarget } from '../shared/tag.js?v=12'
+import { createBot, botInput } from '../shared/tagbot.js?v=12'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -273,8 +273,8 @@ addEventListener('keydown', e => {
 })
 addEventListener('keyup', e => keys.delete(e.code))
 const gest = new Map()
-// スワイプで見回す感度（2026-11-03 本人「ほんとにちょっとだけ高く」で約1.2倍: 0.006→0.0072 / 0.004→0.0048。ワイヤー系全部）
-const LOOK = { yaw: 0.0072, pitch: 0.0048 }
+// スワイプで見回す感度（2026-11-05 本人「ほんの少しだけ上げて」で約1.1倍: 0.0072→0.00792 / 0.0048→0.00528。ワイヤー系全部。その前は 2026-11-03 に 0.006/0.004 から約1.2倍）
+const LOOK = { yaw: 0.00792, pitch: 0.00528 }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2()
 renderer.domElement.addEventListener('pointerdown', e => {
   Snd.init()

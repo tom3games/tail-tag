@@ -427,14 +427,14 @@ await t('車: 通りに車が描かれ（InstancedMesh）、はねられると2�
   })
   expect(r.ev && r.stun > 1.9 && /車|car/.test(r.say) && r.car >= 1 && r.inst, JSON.stringify(r)); return r
 })
-await t('スワイプの見回し感度は約1.2倍（横 0.0072・縦 0.0048）。115px 動かすと 0.828rad 回る', async () => {
+await t('スワイプの見回し感度（横 0.00792・縦 0.00528）。115px 動かすと 0.9108rad 回る', async () => {
   const r = await p.evaluate(() => {
     tt.cam.hd = 0; tt.cam.pitch = 0.1
     const c = document.querySelector('#view canvas'), ev = (type, x, y) => (type === 'pointerdown' ? c : window).dispatchEvent(new PointerEvent(type, { pointerId: 31, clientX: x, clientY: y, bubbles: true }))
     ev('pointerdown', 200, 400); ev('pointermove', 215, 400); ev('pointermove', 315, 450); ev('pointerup', 315, 450)
     return { yaw: tt.LOOK.yaw, pitch: tt.LOOK.pitch, hd: +(-tt.cam.hd).toFixed(4), dp: +(tt.cam.pitch - 0.1).toFixed(4) }
   })
-  expect(r.yaw === 0.0072 && r.pitch === 0.0048 && Math.abs(r.hd - 115 * 0.0072) < 1e-6 && Math.abs(r.dp - 50 * 0.0048) < 1e-6, JSON.stringify(r)); return r
+  expect(r.yaw === 0.00792 && r.pitch === 0.00528 && Math.abs(r.hd - 115 * 0.00792) < 1e-6 && Math.abs(r.dp - 50 * 0.00528) < 1e-6, JSON.stringify(r)); return r
 })
 await t('地面ワイヤー（画面）: 空中で道をタップすると地面に掛かる。地面に立っている時と、ワイヤーボタンでは地面に掛からない。建物をタップした時は建物', async () => {
   const r = await p.evaluate(() => {

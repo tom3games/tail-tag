@@ -1,7 +1,7 @@
 // CPU のしっぽ取り（WIRE ESCAPE の runnerbot と同じ考え方: 行きたい向きの前の建物・電柱にワイヤーを掛けてつなぐ）
 // 性格: cpu（skill 0〜1 で強さ）／検証用: skilled（上手い人）・sloppy（下手な人: 反応が遅く狙いが雑）・ground（地面だけ走る手抜き）・idle（何もしない）
-import { findAnchor, RUN } from './runner.js?v=11'
-import { TAG, lockTarget } from './tag.js?v=11'
+import { findAnchor, RUN } from './runner.js?v=12'
+import { TAG, lockTarget } from './tag.js?v=12'
 
 const ang = a => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a }
 
