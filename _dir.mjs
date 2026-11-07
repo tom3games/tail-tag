@@ -1,4 +1,5 @@
 // 向きの再現: カメラをいろんな向きに回して、スティックを倒した時に画面のどちらへ動くか（スティック無しとの差で見る）
+import './mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'

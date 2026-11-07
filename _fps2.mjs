@@ -1,4 +1,5 @@
 // 遊び中の FPS（スマホ相当: 390x844・CPU 4倍遅く）。node _fps2.mjs [port]。車が走る通りの上で測る
+import './mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'
