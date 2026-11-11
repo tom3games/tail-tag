@@ -15,7 +15,7 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 #boot-err{position:fixed;inset:auto 8px 8px 8px;z-index:99;background:#fff;color:#b00;font:12px/1.4 monospace;white-space:pre-wrap;padding:10px;border-radius:6px}
 
 /* ---------- タイトル（後ろで CPU が飛んでいる） ---------- */
-#title{display:flex;flex-direction:column;align-items:flex-start;padding:max(28px,env(safe-area-inset-top)) 22px max(14px,env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(14,18,34,.62) 0%,rgba(14,18,34,0) 42%,rgba(14,18,34,0) 66%,rgba(14,18,34,.7) 100%)}
+#title{display:flex;flex-direction:column;align-items:flex-start;padding:max(28px,env(safe-area-inset-top)) 22px max(14px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)));background:linear-gradient(180deg,rgba(14,18,34,.62) 0%,rgba(14,18,34,0) 42%,rgba(14,18,34,0) 66%,rgba(14,18,34,.7) 100%)}
 .title-text{color:#fff;max-width:520px}
 .logo{font-family:var(--pop);font-weight:400;font-size:min(10.6vw,64px);white-space:nowrap;line-height:1.08;letter-spacing:.02em;text-shadow:0 3px 0 rgba(0,0,0,.25)}
 .logo span{display:inline-block;transform:rotate(-2.5deg);transform-origin:0 100%}
@@ -76,7 +76,7 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .clock{display:flex;flex-direction:column;align-items:center;flex:none}
 .clock svg{width:38px;height:38px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
 .clock b{font-size:12px;font-weight:900;color:#fff;text-shadow:0 1px 3px #000;margin-top:-1px}
-.glow-warn{position:absolute;left:50%;bottom:max(160px,calc(env(safe-area-inset-bottom) + 150px));transform:translateX(-50%);font-weight:900;font-size:17px;color:#fff;background:rgba(200,50,30,.85);padding:6px 14px;border-radius:3px;animation:pulse .7s ease-in-out infinite alternate;white-space:nowrap}
+.glow-warn{position:absolute;left:50%;bottom:max(160px,calc(calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)) + 150px));transform:translateX(-50%);font-weight:900;font-size:17px;color:#fff;background:rgba(200,50,30,.85);padding:6px 14px;border-radius:3px;animation:pulse .7s ease-in-out infinite alternate;white-space:nowrap}
 @keyframes pulse{from{opacity:.75}to{opacity:1}}
 .say{position:absolute;left:50%;top:22%;transform:translateX(-50%);width:max-content;max-width:min(520px,calc(100% - 32px));font-weight:900;font-size:19px;line-height:1.35;color:#fff;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.85)}
 .say small{display:block;font-size:12px;color:#ffe2a6;font-weight:700}
@@ -96,16 +96,16 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 /* スマホ操作: 左のスティックと、右の跳ぶだけ */
 .touch{position:absolute;inset:0;pointer-events:none}
 /* 左スティックは左下に固定（2026-11-03 本人「左スティックは固定で」）。触る所はスティックの円の少し外まで */
-.stickzone{position:absolute;left:0;bottom:0;width:calc(max(16px,env(safe-area-inset-left)) + 62px + 88px);height:calc(max(16px,env(safe-area-inset-bottom)) + 62px + 88px);pointer-events:auto;touch-action:none}
-.stick{position:absolute;left:calc(max(16px,env(safe-area-inset-left)) + 62px);top:calc(100% - max(16px,env(safe-area-inset-bottom)) - 62px);width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(14,18,34,.22);opacity:.65;pointer-events:none}
+.stickzone{position:absolute;left:0;bottom:0;width:calc(max(16px,env(safe-area-inset-left)) + 62px + 88px);height:calc(max(16px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px))) + 62px + 88px);pointer-events:auto;touch-action:none}
+.stick{position:absolute;left:calc(max(16px,env(safe-area-inset-left)) + 62px);top:calc(100% - max(16px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px))) - 62px);width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(14,18,34,.22);opacity:.65;pointer-events:none}
 .stick.held{opacity:1}
 .stick .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(243,239,228,.85)}
-.tbtn{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));pointer-events:auto;width:104px;height:104px;border-radius:50%;background:rgba(243,239,228,.2);border:2px solid rgba(255,255,255,.7);color:#fff;font-weight:900;font-size:15px;touch-action:none;display:flex;align-items:center;justify-content:center;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.tbtn{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(16px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)));pointer-events:auto;width:104px;height:104px;border-radius:50%;background:rgba(243,239,228,.2);border:2px solid rgba(255,255,255,.7);color:#fff;font-weight:900;font-size:15px;touch-action:none;display:flex;align-items:center;justify-content:center;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 .tbtn svg{width:52px;height:52px}
 .tbtn:active{transform:scale(.94);background:rgba(243,239,228,.4)}
 
 /* ---------- 結果: 表彰台 ---------- */
-#result{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:max(10px,env(safe-area-inset-top)) 14px max(12px,env(safe-area-inset-bottom));background:rgba(10,12,24,.82)}
+#result{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:max(10px,env(safe-area-inset-top)) 14px max(12px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)));background:rgba(10,12,24,.82)}
 .res-wrap{position:relative;flex:1;min-height:0;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
 #podium{max-width:100%;min-height:0;flex:0 1 auto;max-height:calc(100% - 92px);aspect-ratio:720/560;object-fit:contain;border-radius:4px}
 .rank-big{font-family:var(--pop);font-size:min(16vw,72px);line-height:1;color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.35)}
@@ -129,7 +129,7 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
   .sheet ol{font-size:13px;gap:4px}.sheet h2{font-size:22px;margin-bottom:4px}.sheet{padding:12px 18px 10px}
   .stick{width:108px;height:108px;margin:-54px 0 0 -54px}
   .tbtn{width:88px;height:88px}
-  .glow-warn{bottom:max(130px,calc(env(safe-area-inset-bottom) + 120px))}
+  .glow-warn{bottom:max(130px,calc(calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)) + 120px))}
   #result{flex-direction:row}
   .res-wrap{height:100%}
   #podium{max-height:calc(100% - 110px)}
